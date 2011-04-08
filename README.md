@@ -5,7 +5,7 @@ Experimental Kinect network game sample
 
 
 ## How it work?##
-> 1.Kinect --> 2.OpenNI App --[TCP]--> 3.Node.js App(local server) --[WebSocket/Comet]--> 4.Browser <--[WebSocket/Comet]--> 5.Node.js App(remote server) <--[WebSocket/Comet]--> 6.Browser
+	1.Kinect --> 2.OpenNI App --[TCP]--> 3.Node.js App(local server) --[WebSocket/Comet]--> 4.Browser <--[WebSocket/Comet]--> 5.Node.js App(remote server) <--[WebSocket/Comet]--> 6.Browser
 
 
 ## License ##
