@@ -1,0 +1,91 @@
+<html>
+	<head>
+		<title>kinect game base</title>
+		<META http-equiv=content-type content="text/html; charset=UTF-8">
+		<style TYPE="text/css">
+		<!--
+		body{
+			padding: 0px;
+			margin: 0px;
+			overflow-y: scroll;
+		}
+		#main_canvas{
+			background-color: #000000;
+		}
+		#info{
+			position: absolute;
+			color: #ff0000;
+			font-weight: bolder;
+			white-space: nowrap;
+		}
+		#life_bar{
+			position: absolute;
+			opacity: 0.6;
+			height: 10px;
+			background-color: #ff0000;
+		}
+		#life_bar_life{
+			background-color: #00ff00;
+			height: 10px;
+		}
+		.exp_unit{
+			border-style: solid;
+			border-width: 2px;
+			border-color: #aaaaaa;
+			padding: 4px;
+			border-radius: 10px;
+			-webkit-border-radius: 10px;
+			-moz-border-radius: 10px;
+		}
+		#message{
+			background-color: #ffffff;
+			position: absolute;
+			z-index: 10;
+			opacity: 0.6;
+			-webkit-border-radius: 10px;
+			-moz-border-radius: 10px;
+			text-align: center;
+			padding: 30px;
+		}
+		-->
+		</style>
+	</head>
+	<body>
+		<canvas id="main_canvas" width="1000" height="600"></canvas>
+		<div id="info">
+			<div id="fps"></div>
+			<div id="packet_per_second"></div>
+		</div>
+		<div id="life_bar">
+			<div id="life_bar_life"></div>
+		</div>
+		<br>
+		<div class="exp_unit">
+		■ コピーライト<br>
+		- このゲームのキャラクタの画像は、<a href="http://opengameart.org">OpenGameArg.org</a>が配布している3D画像素材の<a href="http://opengameart.org/content/tux">tux</a>を加工して使用してます。<br>
+		</div>
+		<div id="output"></div>
+		<br>
+		<div id="output"></div>
+		<script type="text/javascript">
+			var myModules = {};
+		</script>
+		<script type="text/javascript" defer src="lib/scenejs/scenejs.js"></script>
+		<script type="text/javascript" defer src="../client_and_server/lib/glMatrix-0.9.4.min.js"></script>
+		<script type="text/javascript" src="../lib/my/my_client_and_server.js"></script>
+		<script type="text/javascript">
+			var shorthands = ['DP', 'LOG', 'ASSERT', 'DIR', 'DPD'];
+			for (var i = 0, len = shorthands.length; i < len; i++) {
+				window[shorthands[i]] = myModules.csmy[shorthands[i]];
+			}
+		</script>
+		<script type="text/javascript" defer src="../lib/my/my_client.js"></script>
+		<script type="text/javascript" src="../client_and_server/client_and_server.js"></script>
+		<script type="text/javascript" src="lib/socket.io-client/socket.io.js"></script>
+		<script type="text/javascript">
+			WEB_SOCKET_SWF_LOCATION = 'lib/socket.io-client/lib/vendor/web-socket-js/WebSocketMain.swf';
+		</script>
+		<script type="text/javascript" defer src="blender.js"></script>
+		<script type="text/javascript" defer src="client.js"></script>
+	</body>
+</html>
