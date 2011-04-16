@@ -30,6 +30,7 @@
 #include <XnCodecIDs.h>
 #include <XnCppWrapper.h>
 #include "SceneDrawer.h"
+#include "network.h"
 
 //---------------------------------------------------------------------------
 // Globals
@@ -55,6 +56,8 @@ XnBool g_bPause = false;
 XnBool g_bRecord = false;
 
 XnBool g_bQuit = false;
+
+Tunnel *g_tunnel;
 
 //---------------------------------------------------------------------------
 // Code
@@ -215,7 +218,8 @@ void glInit (int * pargc, char ** argv)
 	glDisableClientState(GL_COLOR_ARRAY);
 }
 
-#define SAMPLE_XML_PATH "../../../Data/SamplesConfig.xml"
+//#define SAMPLE_XML_PATH "../../Data/SamplesConfig.xml"
+#define SAMPLE_XML_PATH "SamplesConfig.xml"
 
 #define CHECK_RC(nRetVal, what)										\
 	if (nRetVal != XN_STATUS_OK)									\
@@ -244,6 +248,7 @@ int main(int argc, char **argv)
 		nRetVal = g_Context.InitFromXmlFile(SAMPLE_XML_PATH);
 		CHECK_RC(nRetVal, "InitFromXml");
 	}
+	g_tunnel = new Tunnel();
 
 	nRetVal = g_Context.FindExistingNode(XN_NODE_TYPE_DEPTH, g_DepthGenerator);
 	CHECK_RC(nRetVal, "Find depth generator");
@@ -282,5 +287,4 @@ int main(int argc, char **argv)
 
 	glInit(&argc, argv);
 	glutMainLoop();
-
 }
