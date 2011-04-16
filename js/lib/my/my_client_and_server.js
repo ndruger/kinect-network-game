@@ -5,7 +5,7 @@ if (typeof exports == 'undefined') {
 	exports = {};
 }
 if (typeof myModules != 'undefined') {
-	module = myModules.csmy = {};
+	module = myModules.mycs = {};
 } else {
 	module = exports;
 }

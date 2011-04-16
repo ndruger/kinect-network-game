@@ -10,9 +10,7 @@ var ASSERT = mycs.ASSERT;
 var DP = mycs.DP;
 
 var DEBUG = false;
-var ID_SIZE = 10;
 var field, player, proxy;
-var jointBaseY = 0;
 
 function Field(){
 	this._idMap = {};
@@ -53,7 +51,7 @@ Field.prototype.sendMap = function(conn){
 };
 
 function Piece(point, type){
-	this.id = type + mycs.createId(ID_SIZE);
+	this.id = type + mycs.createId(cs.ID_SIZE);
 	this.pos = point;
 	this.type = type;
 	field.addPiece(this, this.id);
@@ -228,7 +226,7 @@ function Enemy(point, is_debug_enemy, oclient){
 }
 mycs.inherit(Enemy, Piece);
 Enemy.prototype.createBullet = function(){
-	var player_pos = player.getRandomJointPosition();
+	var player_pos = player.getRandomServerJointPosition();
 	if (!player_pos) {
 		return;
 	}
@@ -254,44 +252,11 @@ Enemy.prototype.setDamege = function(damege){
 	var enemies = field.getPiecesByType('enemy');
 };
 
-function Joint(type, player){
-	this.type = type;
-	this.pos = null;
-	this.id = this.type + mycs.createId(ID_SIZE);
+function ServerJoint(type, player){
+	mycs.superClass(ServerJoint).constructor.apply(this, [type, player]);
 }
-Joint.H_SIZE = 0.3;
-Joint.LEFT_SIELD_H_SIZE = 1.5;
-Joint.types = [
-	'HEAD',
-	'NECK',
-	'LEFT_SHOULDER',
-	'RIGHT_SHOULDER', 
-	'LEFT_ELBOW',
-	'RIGHT_ELBOW',
-	'LEFT_HAND',
-	'RIGHT_HAND',	
-	'TORSO',
-	'LEFT_HIP',
-	'RIGHT_HIP',	
-	'LEFT_KNEE',
-	'RIGHT_KNEE',
-	'LEFT_FOOT',
-	'RIGHT_FOOT'
-];
-Joint.prototype.destroy = function(){
-	ASSERT(false);	// release index, destroy node
-};
-Joint.prototype.setPosition = function(pos){
-	this.pos = pos;
-	proxy.broadcast({
-		type: 'joint_pos',
-		arg: {
-			type: this.type,
-			pos: this.pos
-		}
-	});
-};
-Joint.prototype.checkCollision = function(pos, r){
+mycs.inherit(ServerJoint, cs.Joint);
+ServerJoint.prototype.checkCollision = function(pos, r){
 	if (!this.pos) {
 		return false;
 	}
@@ -300,63 +265,15 @@ Joint.prototype.checkCollision = function(pos, r){
 	}
 	return false;
 };
-Joint.prototype.getPosition = function(){
-	return this.pos;
-};
 
-function EdgePoints(type){
-	this.type = type;
-	this.poss = [];
-	this.id = this.type + mycs.createId(ID_SIZE);
+function ServerEdgePoints(type){
+	mycs.superClass(ServerEdgePoints).constructor.apply(this, [type]);
 }
-EdgePoints.types = [
-	'HEAD-NECK',
-	'NECK-LEFT_SHOULDER',
-	'LEFT_SHOULDER-LEFT_ELBOW',
-	'LEFT_ELBOW-LEFT_HAND',
-	'NECK-RIGHT_SHOULDER',
-	'RIGHT_SHOULDER-RIGHT_ELBOW',
-	'RIGHT_ELBOW-RIGHT_HAND',
-	'LEFT_SHOULDER-TORSO',
-	'RIGHT_SHOULDER-TORSO',
-	'TORSO-LEFT_HIP',
-	'LEFT_HIP-LEFT_KNEE',
-	'LEFT_KNEE-LEFT_FOOT',
-	'TORSO-RIGHT_HIP',
-	'RIGHT_HIP-RIGHT_KNEE',
-	'RIGHT_KNEE-RIGHT_FOOT',
-	'LEFT_HIP-RIGHT_HIP'
-];
-EdgePoints.H_SIZE = 0.05;
-EdgePoints.NUM = 2;
-EdgePoints.prototype.destroy = function(){
-	ASSERT(false);	// release index, destroy node
-};
-EdgePoints.calcPosition = function(from_pos, to_pos, index){
-	return {
-		x: from_pos.x + (to_pos.x - from_pos.x) / (EdgePoints.NUM + 1) * (index + 1),
-		y: from_pos.y + (to_pos.y - from_pos.y) / (EdgePoints.NUM + 1) * (index + 1),
-		z: from_pos.z + (to_pos.z - from_pos.z) / (EdgePoints.NUM + 1) * (index + 1)
-	};
-};
-EdgePoints.prototype.setPosition = function(from_pos, to_pos){
-	for (var i = 0; i < EdgePoints.NUM; i++) {
-		var pos = EdgePoints.calcPosition(from_pos, to_pos, i);
-		this.poss[i] = pos;
-		proxy.broadcast({
-			type: 'edge_point_pos',
-			arg: {
-				type: this.type,
-				pos: this.poss[i],
-				index: i
-			}
-		});
-	}
-};
-EdgePoints.prototype.checkCollision = function(pos, r){
-	for (var i = 0; i < EdgePoints.NUM; i++) {
+mycs.inherit(ServerEdgePoints, cs.EdgePoints);
+ServerEdgePoints.prototype.checkCollision = function(pos, r){
+	for (var i = 0; i < cs.EdgePoints.NUM; i++) {
 		if (this.poss[i]) {
-			if (cs.isOverlapped(this.poss[i], EdgePoints.H_SIZE, pos, r)) {
+			if (cs.isOverlapped(this.poss[i], cs.EdgePoints.H_SIZE, pos, r)) {
 				return true;
 			}
 		}
@@ -383,10 +300,10 @@ GestureManager.prototype.destroy = function(){
 	}
 };
 GestureManager.prototype.storeSnapShot = function(){
-	var len = Joint.types.length;
+	var len = cs.Joint.types.length;
 	var snapshot = {};
 	for (var i = 0; i < len; i++) {
-		var id = Joint.types[i];
+		var id = cs.Joint.types[i];
 		var joint = this.player.joints[id];
 		if (joint.pos) {
 			snapshot[joint.type] = mycs.deepCopy(joint.pos);
@@ -427,43 +344,33 @@ GestureManager.prototype.DetectAction = function(){
 	}
 };
 
-function Player(){
-	this.id = 'player';
-	this.life = Player.LIFE_MAX;
-
-	this.joints = {};
-	var len = Joint.types.length;
-	for (var i = 0; i < len; i++) {
-		var type = Joint.types[i];
-		this.joints[type] = new Joint(type, this);
-	}
-	this.edge_points = {};
-	len = EdgePoints.types.length;
-	for (i = 0; i < len; i++) {
-		type = EdgePoints.types[i];
-		this.edge_points[type] = new EdgePoints(type);
-	}
+function ServerPlayer(){
+	var factory = {
+		createJoint: function(type, player){
+			return new ServerJoint(type, player);
+		},
+		createEdgePoints: function(type){
+			return new ServerEdgePoints(type);
+			
+		}
+	};
+	mycs.superClass(ServerPlayer).constructor.apply(this, [factory]);
 	this._gestureManager = new GestureManager(this);
 }
-Player.prototype.destroy = function(){
+mycs.inherit(ServerPlayer, cs.Player);
+ServerPlayer.prototype.destroy = function(){
 	ASSERT(false);	// todo: remove scene.js nodes
 	this._gestureManager.destroy();
 };
-Player.LIFE_MAX = 200;
-Player.prototype.setJointPosition = function(update){
-	this.joints[update.from.name].setPosition(update.from);
-	this.joints[update.to.name].setPosition(update.to);
-	this.edge_points[update.from.name + '-' + update.to.name].setPosition(update.from, update.to);
-};
-Player.prototype.getRandomJointPosition = function(){
-	return this.joints[Joint.types[Math.floor(Math.random() * Joint.types.length)]].pos;
+ServerPlayer.prototype.getRandomServerJointPosition = function(){
+	return this.joints[cs.Joint.types[Math.floor(Math.random() * cs.Joint.types.length)]].pos;
 };
 
-Player.prototype.checkShieldCollision = function(pos, r){
+ServerPlayer.prototype.checkShieldCollision = function(pos, r){
 	return this.joints['LEFT_HAND'].checkCollision(pos, r);
 };
 
-Player.prototype.checkDamageCollision = function(pos, r){
+ServerPlayer.prototype.checkDamageCollision = function(pos, r){
 	for (var k in this.joints) {
 		if (k === 'LEFT_HAND') {	// todo: 'shield' attribute must be attribute of each joint.
 			continue;
@@ -473,15 +380,16 @@ Player.prototype.checkDamageCollision = function(pos, r){
 			return true;
 		}
 	}
-	for (k in this.edge_points) {
-		var edge_point = this.edge_points[k];
-		if (edge_point.checkCollision(pos, r)) {
+	for (var i= 0, len = this.edgePoints.length; i < len; i++) {
+		/*
+		if (this.edgePoints[i].checkCollision(pos, r)) {
 			return true;
 		}
+		*/
 	}
 	return false;
 };
-Player.prototype.setDamege = function(damege){
+ServerPlayer.prototype.setDamege = function(damege){
 	this.life -= damege;
 	this.life = (this.life < 0) ? 0: this.life;
 	proxy.broadcast({
@@ -492,25 +400,13 @@ Player.prototype.setDamege = function(damege){
 	});
 };
 
-var oldFootY = {
-	LEFT_FOOT: 0,
-	RIGHT_FOOT: 0
-};
-
 var handleMessage = function(data){
 	switch (data.type) {
 	case 'kinect_joint_postion':
-		data.arg.from.x *= cs.SCALE; data.arg.from.y *= cs.SCALE;	data.arg.from.z *= cs.SCALE;
-		data.arg.to.x *= cs.SCALE; data.arg.to.y *= cs.SCALE;	data.arg.to.z *= cs.SCALE;
-		
-		if (data.arg.to.name === 'LEFT_FOOT' || data.arg.to.name === 'RIGHT_FOOT') {
-			oldFootY[data.arg.to.name] = data.arg.to.y;
+		for (var i = 0, len = data.arg.length; i < len; i++) {
+			player.setJointPosition(data.arg[i]);
 		}
-		jointBaseY = -Math.min(oldFootY['LEFT_FOOT'] - Joint.H_SIZE, oldFootY['RIGHT_FOOT'] - Joint.H_SIZE);
-	
-		data.arg.from.y += jointBaseY;
-		data.arg.to.y += jointBaseY;
-		player.setJointPosition(data.arg);
+		proxy.broadcast(data);
 		break;
 	case 'bullet':
 		var enemy = field.getPiece(data.arg.id);
@@ -544,4 +440,4 @@ field = new Field();
 if (DEBUG) {
 	field.initEnemies();
 }
-player = new Player();
+player = new ServerPlayer();

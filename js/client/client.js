@@ -2,13 +2,13 @@
 /*global Enemy */
 (function(){
 var cs = myModules.cs;
-var mycs = myModules.csmy;
-var myc = myModules.cmy;
+var mycs = myModules.mycs;
+var myc = myModules.myc;
 
 var DEBUG = true;
 var isViewerMode = true;
 
-var kinect_proxy, remote_proxy, field, player, fpsCounter, packetCounter, myEnemyId;
+var kinect_proxy, remote_proxy, field, player, fpsCounter, remotePacketCounter, devicePacketCounter, myEnemyId;
 
 var FPS = 60;
 var jointBaseY = 0;
@@ -16,7 +16,6 @@ var jointBaseY = 0;
 var SCALE = 0.008;
 var EYE_Z = -70;	// todo: check SCALE
 var LOOK_AT_EYE = { x: 0.0, y: 10, z: EYE_Z };
-var ID_SIZE = 10;
 
 // todo: create objects
 function setNodeXYZ(id, pos){
@@ -181,7 +180,7 @@ function Piece(point, type, oid){
 	if (typeof oid != 'undefined') {
 		this.id = oid;
 	} else {
-		this.id = type + mycs.createId(ID_SIZE);
+		this.id = type + mycs.createId(cs.ID_SIZE);
 	}
 	this.pos = point;
 	this.type = type;
@@ -315,12 +314,6 @@ Enemy.prototype._createNode = function(){
 	SceneJS.withNode(this.id + '-rotate-x').set('angle', Enemy.X_ANGLE_BASE); 
 	this.updateScale(cs.ENEMY_SIZE, cs.ENEMY_SIZE, cs.ENEMY_SIZE);
 };
-Enemy.prototype.checkCollision = function(pos, r){
-	if (cs.isOverlapped(this.pos, cs.ENEMY_SIZE, pos, r)) {
-		return true;
-	}
-	return false;
-};
 Enemy.prototype.setDamege = function(damege){
 	this.destroy();
 	var enemies = field.getPiecesByType('enemy');
@@ -329,7 +322,8 @@ Enemy.prototype.setDamege = function(damege){
 	}
 };
 
-function Joint(type, player){
+function ClientJoint(type, player){
+	mycs.superClass(ClientJoint).constructor.apply(this, [type, player]);
 	function createEdge(id) {
 		return {
 			type: "translate",
@@ -341,9 +335,9 @@ function Joint(type, player){
 				opacity: 1.0,
 				nodes: [{
 					type : "cube",
-					xSize: Joint.H_SIZE,
-					ySize: Joint.H_SIZE,
-					zSize: Joint.H_SIZE
+					xSize: cs.Joint.H_SIZE,
+					ySize: cs.Joint.H_SIZE,
+					zSize: cs.Joint.H_SIZE
 				}]
 			}]
 		};
@@ -368,8 +362,8 @@ function Joint(type, player){
 		            }],
 					nodes: [{
 	                    type: "scale",
-	                    x: Joint.SIELD_H_SIZE,
-	                    y: Joint.SIELD_H_SIZE,
+	                    x: cs.Joint.SIELD_H_SIZE,
+	                    y: cs.Joint.SIELD_H_SIZE,
 	                    z: 0.1,
 	                    nodes: [{
 	                    	type: "cube"
@@ -380,98 +374,38 @@ function Joint(type, player){
 		};
 	}
 
-	this.type = type;
-	this.pos = null;
-	this.id = this.type + mycs.createId(ID_SIZE);
-
 	if (this.type === 'LEFT_HAND') {
-		this.harfSize =  Joint.SIELD_H_SIZE;
 		this._createNode(createShield);
 	} else {
-		this.harfSize =  Joint.H_SIZE;
 		this._createNode(createEdge);
 	}
 	
 }
-Joint.H_SIZE = 0.3;
-Joint.SIELD_H_SIZE = 1.5;
-Joint.types = [
-	'HEAD',
-	'NECK',
-	'LEFT_SHOULDER',
-	'RIGHT_SHOULDER', 
-	'LEFT_ELBOW',
-	'RIGHT_ELBOW',
-	'LEFT_HAND',
-	'RIGHT_HAND',	
-	'TORSO',
-	'LEFT_HIP',
-	'RIGHT_HIP',	
-	'LEFT_KNEE',
-	'RIGHT_KNEE',
-	'LEFT_FOOT',
-	'RIGHT_FOOT'
-];
-Joint.prototype.destroy = function(){
+mycs.inherit(ClientJoint, cs.Joint);
+ClientJoint.prototype.destroy = function(){
 	ASSERT(false);	// destroy node
 };
-Joint.prototype._createNode = function(factory){
+ClientJoint.prototype._createNode = function(factory){
 	var nodes = [];
-
 	nodes.push(factory(this.id + '-translate'));
-
 	createAndMountNodes(nodes, this.id);
 };
-Joint.prototype.setPosition = function(pos){
-	this.pos = pos;
+ClientJoint.prototype.setPosition = function(pos){
+	mycs.superClass(ClientJoint).setPosition.apply(this, [pos]);
 	setNodeXYZ(this.id + '-translate', this.pos);
 };
-Joint.prototype.checkCollision = function(pos, r){
-	if (!this.pos) {
-		return false;
-	}
-	if (cs.isOverlapped(this.pos, this.harfSize, pos, r)) {
-		return true;
-	}
-	return false;
-};
-Joint.prototype.getPosition = function(){
-	var node = SceneJS.withNode(this.id + '-translate');
-	return {x: node.get('x'), y: node.get('y'), z: node.get('z')};
-};
 
-function EdgePoints(type){
-	this.type = type;
-	this.poss = [];
-	this.id = this.type + mycs.createId(ID_SIZE);
+function ClientEdgePoints(type){
+	mycs.superClass(ClientEdgePoints).constructor.apply(this, [type]);
 	this._createNode();
 }
-EdgePoints.types = [
-	'HEAD-NECK',
-	'NECK-LEFT_SHOULDER',
-	'LEFT_SHOULDER-LEFT_ELBOW',
-	'LEFT_ELBOW-LEFT_HAND',
-	'NECK-RIGHT_SHOULDER',
-	'RIGHT_SHOULDER-RIGHT_ELBOW',
-	'RIGHT_ELBOW-RIGHT_HAND',
-	'LEFT_SHOULDER-TORSO',
-	'RIGHT_SHOULDER-TORSO',
-	'TORSO-LEFT_HIP',
-	'LEFT_HIP-LEFT_KNEE',
-	'LEFT_KNEE-LEFT_FOOT',
-	'TORSO-RIGHT_HIP',
-	'RIGHT_HIP-RIGHT_KNEE',
-	'RIGHT_KNEE-RIGHT_FOOT',
-	'LEFT_HIP-RIGHT_HIP'
-];
-EdgePoints.H_SIZE = 0.05;
-EdgePoints.NUM = 2;
-EdgePoints.prototype.destroy = function(){
+mycs.inherit(ClientEdgePoints, cs.EdgePoints);
+ClientEdgePoints.prototype.destroy = function(){
 	ASSERT(false);	// destroy node
 };
-EdgePoints.prototype._createNode = function(){
+ClientEdgePoints.prototype._createNode = function(){
 	var nodes = [];
-	for (var i = 0; i < EdgePoints.NUM; i++) {
+	for (var i = 0; i < cs.EdgePoints.NUM; i++) {
 		nodes.push({
 			type: "translate",
 			id: this.id + '-' + i + '-translate',
@@ -482,95 +416,56 @@ EdgePoints.prototype._createNode = function(){
 				opacity:        1.0,
 				nodes: [{
 					type : "cube",
-					xSize: EdgePoints.H_SIZE,
-					ySize : EdgePoints.H_SIZE,
-					zSize : EdgePoints.H_SIZE
+					xSize: cs.EdgePoints.H_SIZE,
+					ySize : cs.EdgePoints.H_SIZE,
+					zSize : cs.EdgePoints.H_SIZE
 				}]
 			}]
 		});
 	}
 	createAndMountNodes(nodes, this.id);
 };
-EdgePoints.prototype.setPosition = function(index, pos){
-	this.poss[index] = pos;
-	setNodeXYZ(this.id + '-' + index + '-translate', pos);
+ClientEdgePoints.prototype.setPosition = function(fromPos, toPos){
+	mycs.superClass(ClientEdgePoints).setPosition.apply(this, [fromPos, toPos]);
+	for (var i = 0; i < cs.EdgePoints.NUM; i++) {
+		setNodeXYZ(this.id + '-' + i + '-translate', this.poss[i]);
+	}
 };
-EdgePoints.prototype.checkCollision = function(pos, r){
-	for (var i = 0; i < EdgePoints.NUM; i++) {
-		if (this.poss[i]) {
-			if (cs.isOverlapped(this.poss[i], EdgePoints.H_SIZE, pos, r)) {
-				return true;
-			}
+
+function ClientPlayer(){
+	var factory = {
+		createJoint: function(type, player){
+			return new ClientJoint(type, player);
+		},
+		createEdgePoints: function(type){
+			return new ClientEdgePoints(type);
+			
 		}
-	}
-	return false;
-};
-
-function Player(){
-	this.id = 'player';
-	this.life = Player.LIFE_MAX;
-
-	this.joints = {};
-	var len = Joint.types.length;
-	for (var i = 0; i < len; i++) {
-		var type = Joint.types[i];
-		this.joints[type] = new Joint(type, this);
-	}
-	this.edge_points = {};
-	len = EdgePoints.types.length;
-	for (i = 0; i < len; i++) {
-		type = EdgePoints.types[i];
-		this.edge_points[type] = new EdgePoints(type);
-	}
+	};
+	mycs.superClass(ClientPlayer).constructor.apply(this, [factory]);
 }
-Player.prototype.destroy = function(){
+mycs.inherit(ClientPlayer, cs.Player);
+ClientPlayer.prototype.destroy = function(){
 	ASSERT(false);	// todo: remove scene.js nodes
 };
-Player.LIFE_MAX = 200;
-Player.prototype.getRandomJointPosition = function(){
-	return this.joints[Joint.types[Math.floor(Math.random() * Joint.types.length)]].pos;
-};
-
-Player.prototype.checkShieldCollision = function(pos, r){
-	return this.joints['LEFT_HAND'].checkCollision(pos, r);
-};
-
-Player.prototype.checkDamageCollision = function(pos, r){
-	for (var k in this.joints) {
-		if (k === 'LEFT_HAND') {	// todo: 'shield' attribute must be attribute of each joint.
-			continue;
-		}
-		var joint = this.joints[k];
-		if (joint.checkCollision(pos, r)) {
-			return true;
-		}
-	}
-	for (k in this.edge_points) {
-		var edge_point = this.edge_points[k];
-		if (edge_point.checkCollision(pos, r)) {
-			return true;
-		}
-	}
-	return false;
-};
-Player.prototype.updateLife = function(life){
-	document.getElementById('life_bar_life').style.width = life * (100 / Player.LIFE_MAX) + '%';
+ClientPlayer.prototype.updateLife = function(life){
+	document.getElementById('life_bar_life').style.width = life * (100 / cs.Player.LIFE_MAX) + '%';
 	if (life === 0 && !DEBUG) {
 		displayMessage('You lose. Press F5 to retry.');
 	}
 };
 
-var oldFootY = {
-	LEFT_FOOT: 0,
-	RIGHT_FOOT: 0
-};
-
 var handleRemoteMessage = function(data){
-	packetCounter.count(function(pps){
-		document.getElementById('packet_per_second').innerHTML = pps + ' Packets / Second';
+	remotePacketCounter.count(function(pps){
+		document.getElementById('packet_per_second_from_remote').innerHTML = pps + ' Packets / Second from remote';
 	});
 	var bullet, enemy;
 	switch (data.type) {
+	case 'kinect_joint_postion':
+		for (var i = 0, len = data.arg.length; i < len; i++) {
+			player.setJointPosition(data.arg[i]);
+		}
+		break;
 	case 'update_position':
 		switch(data.arg.type){
 		case 'bullet':
@@ -581,7 +476,7 @@ var handleRemoteMessage = function(data){
 			break;
 		}
 		break;
-	case 'joint_pos':
+	case 'joint_pos':	// for remote user
 		player.joints[data.arg.type].setPosition(data.arg.pos);
 		break;
 	case 'edge_point_pos':
@@ -650,7 +545,8 @@ function render() {
 
 function handleLoad(e){
 	fpsCounter = new mycs.XPSCounter();
-	packetCounter = new mycs.XPSCounter();
+	remotePacketCounter = new mycs.XPSCounter();
+	devicePacketCounter = new mycs.XPSCounter();
 	var canvas = document.getElementById('main_canvas');
 	canvas.width = document.body.clientWidth;
 	canvas.height = document.body.clientHeight;
@@ -667,14 +563,17 @@ function handleLoad(e){
 	info.style.top = canvas_bound_rect.top + window.scrollY + 30 + 'px';
 	
 	field = new Field(canvas.width / canvas.height);
-	player = new Player();
+	player = new ClientPlayer();
 	kinect_proxy = new myc.SocketIoProxy(
 		cs.DEVICE_PORT,
 		function(){
 			LOG('device proxy open');
 		},
-		function(message){
-			remote_proxy.send(message);
+		function(data){
+			devicePacketCounter.count(function(pps){
+				document.getElementById('packet_per_second_from_device').innerHTML = pps + ' Packets / Second from device';
+			});
+			remote_proxy.send(data);
 		},
 		function(){
 			LOG('device proxy close');

@@ -54,7 +54,8 @@
 		<canvas id="main_canvas" width="1000" height="600"></canvas>
 		<div id="info">
 			<div id="fps"></div>
-			<div id="packet_per_second"></div>
+			<div id="packet_per_second_from_remote"></div>
+			<div id="packet_per_second_from_device"></div>
 		</div>
 		<div id="life_bar">
 			<div id="life_bar_life"></div>
@@ -66,7 +67,6 @@
 		</div>
 		<div id="output"></div>
 		<br>
-		<div id="output"></div>
 		<script type="text/javascript">
 			var myModules = {};
 		</script>
@@ -76,7 +76,7 @@
 		<script type="text/javascript">
 			var shorthands = ['DP', 'LOG', 'ASSERT', 'DIR', 'DPD'];
 			for (var i = 0, len = shorthands.length; i < len; i++) {
-				window[shorthands[i]] = myModules.csmy[shorthands[i]];
+				window[shorthands[i]] = myModules.mycs[shorthands[i]];
 			}
 		</script>
 		<script type="text/javascript" defer src="../lib/my/my_client.js"></script>
