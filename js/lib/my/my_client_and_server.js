@@ -49,11 +49,15 @@ var ASSERT = function(exp, var_args){
 	}
 };
 module.ASSERT = ASSERT;
-module.inherit = function(subClass, superClass){
+function mixin(subClass, superClass){
 	for (var prop in superClass.prototype) {
 		subClass.prototype[prop] = superClass.prototype[prop];
 	}
 	subClass.prototype.constructor = subClass;
+}
+module.mixin = mixin;
+module.inherit = function(subClass, superClass){
+	mixin(subClass, superClass);
 	subClass.prototype.superClass = superClass;
 };
 module.superClass = function(subClass){

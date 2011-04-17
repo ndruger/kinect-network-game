@@ -12,31 +12,11 @@ var DP = mycs.DP;
 var DEBUG = false;
 var field, player, proxy;
 
-function Field(){
-	this._idMap = {};
+function ServerField(){
+	mycs.superClass(ServerField).constructor.apply(this, []);
 }
-Field.prototype.getPiece = function(id){
-	return this._idMap[id];
-};
-Field.prototype.addPiece = function(piece, id){
-	ASSERT(!this._idMap[id]);
-	this._idMap[id] = piece;
-};
-Field.prototype.removePiece = function(id){
-	ASSERT(this._idMap[id]);
-	delete this._idMap[id];
-};
-Field.prototype.getPiecesByType = function(type){
-	var pieces = [];
-	for (var id in this._idMap) {
-		var piece = this._idMap[id];
-		if (piece.type === type) {
-			pieces.push(piece);
-		}
-	}
-	return pieces;
-};
-Field.prototype.initEnemies = function(){
+mycs.inherit(ServerField, cs.Field);
+ServerField.prototype.initEnemies = function(){
 	for (var i = 0; i < 10; i++) {
 		var x = Math.random() * 50 - 25;
 		var y = cs.ENEMY_SIZE / 2 - 1;
@@ -44,26 +24,26 @@ Field.prototype.initEnemies = function(){
 		new Enemy({x: x, y: y, z: z}, true);
 	}
 };
-Field.prototype.sendMap = function(conn){
+ServerField.prototype.sendMap = function(conn){
 	for (var id in this._idMap) {
 		this._idMap[id].sendMap(conn);
 	}
 };
 
-function Piece(point, type){
+function Unit(point, type){
 	this.id = type + mycs.createId(cs.ID_SIZE);
 	this.pos = point;
 	this.type = type;
 	field.addPiece(this, this.id);
 }
-Piece.prototype.destroy = function(){
+Unit.prototype.destroy = function(){
 	field.removePiece(this.id);
 	proxy.broadcast(this.makeSendData('destroy', {
 		type: this.type,
 		id: this.id
 	}));
 };
-Piece.prototype.updatePosition = function(pos) {
+Unit.prototype.updatePosition = function(pos) {
 	this.pos = pos;
 	proxy.broadcast(this.makeSendData('update_position', {
 		type: this.type,
@@ -71,14 +51,14 @@ Piece.prototype.updatePosition = function(pos) {
 		pos: this.pos
 	}));
 };
-Piece.prototype.sendMap = function(conn){
+Unit.prototype.sendMap = function(conn){
 	proxy.send(conn, this.makeSendData('send_map', {
 		type: this.type,
 		id: this.id,
 		pos: this.pos
 	}));
 };
-Piece.prototype.makeSendData = function(action_type, arg_o){
+Unit.prototype.makeSendData = function(action_type, arg_o){
 	return {
 		type: action_type,
 		arg: arg_o
@@ -104,7 +84,7 @@ function MovableObject(point, type, speed, handle_dir){
 	}, MovableObject.TIMER_INTERVAL); 
 }
 MovableObject.TIMER_INTERVAL = 100;
-mycs.inherit(MovableObject, Piece);
+mycs.inherit(MovableObject, Unit);
 MovableObject.prototype.destroy = function(){
 	if (this.moveTimer !== -1) {
 		clearInterval(this.moveTimer);
@@ -224,7 +204,7 @@ function Enemy(point, is_debug_enemy, oclient){
 		this.throwTimer = -1;
 	}
 }
-mycs.inherit(Enemy, Piece);
+mycs.inherit(Enemy, Unit);
 Enemy.prototype.createBullet = function(){
 	var player_pos = player.getRandomServerJointPosition();
 	if (!player_pos) {
@@ -381,11 +361,9 @@ ServerPlayer.prototype.checkDamageCollision = function(pos, r){
 		}
 	}
 	for (var i= 0, len = this.edgePoints.length; i < len; i++) {
-		/*
 		if (this.edgePoints[i].checkCollision(pos, r)) {
 			return true;
 		}
-		*/
 	}
 	return false;
 };
@@ -406,13 +384,17 @@ var handleMessage = function(data){
 		for (var i = 0, len = data.arg.length; i < len; i++) {
 			player.setJointPosition(data.arg[i]);
 		}
-		proxy.broadcast(data);
+		proxy.broadcast(data);	// todo
 		break;
 	case 'bullet':
 		var enemy = field.getPiece(data.arg.id);
 		if (enemy) {
 			enemy.createBullet();
 		}
+		break;
+	case 'turn':
+		player.turn(data.arg.diff);
+		proxy.broadcast(data);	// todo
 		break;
 	}
 };
@@ -436,7 +418,7 @@ proxy = new mys.SocketIoProxy(cs.REMOTE_PORT, function(client){
 	}
 );
 
-field = new Field();
+field = new ServerField();
 if (DEBUG) {
 	field.initEnemies();
 }

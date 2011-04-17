@@ -8,8 +8,10 @@ if (typeof myModules != 'undefined') {
 	myModules.cs = exports;
 	mycs = myModules.mycs;
 } else {
+	eval(require('fs').readFileSync('../client_and_server/lib/glMatrix-0.9.4.min.js', 'utf8'));
 	mycs = require('../lib/my/my_client_and_server');
 }
+var ASSERT = mycs.ASSERT;
 exports.REMOTE_PORT = 8761;
 exports.DEVICE_PORT = 8869;
 exports.FIELD_SIZE = 100;
@@ -25,10 +27,7 @@ exports.ID_SIZE = ID_SIZE;
 var SCALE = 0.008;
 exports.SCALE = SCALE;
 
-exports.calcRoatatePosition = function(angle, r, omat4){
-	if (typeof omat4 !== 'undefined') {	// todo
-		mat4 = omat4;
-	}
+exports.calcRoatatePosition = function(angle, r){
 	var modelView = mat4.create();
 	
 	mat4.identity(modelView);
@@ -115,6 +114,32 @@ EdgePoints.prototype.setPosition = function(fromPos, toPos){
 };
 exports.EdgePoints = EdgePoints;
 
+function Field(){
+	this._pieces = {};
+}
+exports.Field = Field;
+Field.prototype.getPiece = function(id){
+	return this._pieces[id];
+};
+Field.prototype.addPiece = function(piece, id){
+	ASSERT(!this._pieces[id]);
+	this._pieces[id] = piece;
+};
+Field.prototype.removePiece = function(id){
+	ASSERT(this._pieces[id]);
+	delete this._pieces[id];
+};
+Field.prototype.getPiecesByType = function(type){
+	var pieces = [];
+	for (var id in this._pieces) {
+		var piece = this._pieces[id];
+		if (piece.type === type) {
+			pieces.push(piece);
+		}
+	}
+	return pieces;
+};
+
 function Joint(type, player){
 	this.type = type;
 	this.pos = null;
@@ -153,8 +178,11 @@ Joint.prototype.getPosition = function(){
 };
 
 function Player(factory){
+	// todo: check dependency(id etc)
 	this.id = 'player';
 	this.life = Player.LIFE_MAX;
+	this.basePos = null;
+	this.angleY = 0;
 
 	this.oldFootY = {
 		LEFT_FOOT: 0,
@@ -173,10 +201,15 @@ function Player(factory){
 		this.edgePoints.push(factory.createEdgePoints(EdgePoints.types[i]));
 	}
 }
+exports.Player = Player;
 Player.LIFE_MAX = 200;
 Player.prototype.setJointPosition = function(update){
 	var joint = mycs.deepCopy(update);
 	joint.x *= SCALE; joint.y *= SCALE;	joint.z *= SCALE;
+	if (this.basePos) {
+		var newPos = this.rotatePosition({x: joint.x, y: joint.y, z: joint.z});
+		joint.x = newPos[0]; joint.y = newPos[1]; joint.z = newPos[2];
+	}
 	
 	if (joint.name === 'LEFT_FOOT' || joint.name === 'RIGHT_FOOT') {
 		this.oldFootY[joint.name] = joint.y;
@@ -195,7 +228,49 @@ Player.prototype.setJointPosition = function(update){
 		}
 		points.setPosition(this.joints[points.type.from].pos, this.joints[points.type.to].pos);
 	}
+	if (!this.basePos) {
+		this.updateBasePosition();
+	}
 };
-exports.Player = Player;
+Player.prototype.updateBasePosition = function(){
+	var sumX = 0, sumZ = 0;
+	var count = 0;
+	for (var k in this.joints) {
+		var pos = this.joints[k].pos;
+		if (!pos) {
+			continue;
+		}
+		count++;
+		sumX += this.joints[k].pos.x;
+		sumZ += this.joints[k].pos.z;
+	}
+	this.basePos = {x: sumX / count, y: 0, z: sumZ / count};
+};
+function pointToArray(point){
+	return [point.x, point.y, point.z];
+}
+function arrayToPoint(array){
+	return {
+		x: array[0],
+		y: array[1],
+		z: array[2]
+	};
+}
+Player.prototype.rotatePosition = function(pos){
+	var modelView = mat4.create();
+	
+	mat4.identity(modelView);
+	mat4.translate(modelView, pointToArray(this.basePos));
+	mat4.rotate(modelView, this.angleY * (Math.PI / 180.0), [0, 1, 0]);
+	mat4.translate(modelView, [-this.basePos.x, -this.basePos.y, -this.basePos.z]);
+
+	var newPos = [0, 0, 0];
+	mat4.multiplyVec3(modelView, pointToArray(pos), newPos);
+
+	return newPos;
+};
+Player.prototype.turn = function(diff){
+	this.angleY += diff;
+};
 
 })();

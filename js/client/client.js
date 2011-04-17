@@ -6,15 +6,13 @@ var mycs = myModules.mycs;
 var myc = myModules.myc;
 
 var DEBUG = true;
-var isViewerMode = true;
 
-var kinect_proxy, remote_proxy, field, player, fpsCounter, remotePacketCounter, devicePacketCounter, myEnemyId;
+var kinectProxy, remoteProxy, field, player, fpsCounter, remotePacketCounter, devicePacketCounter, myEnemyId;
 
 var FPS = 60;
-var jointBaseY = 0;
 
 var SCALE = 0.008;
-var EYE_Z = -70;	// todo: check SCALE
+var EYE_Z = 70;	// todo: check SCALE
 var LOOK_AT_EYE = { x: 0.0, y: 10, z: EYE_Z };
 
 // todo: create objects
@@ -22,7 +20,7 @@ function setNodeXYZ(id, pos){
 	var node = SceneJS.withNode(id);
 	node.set('x', pos.x);
 	node.set('y', pos.y);
-	node.set('z', pos.z);	
+	node.set('z', pos.z);
 }
 function createAndMountNodes(node, id){
 	SceneJS.Message.sendMessage({
@@ -59,9 +57,8 @@ function displayMessage(message){
 	ele.innerHTML = message;
 }
 
-function Field(aspect){
-	this._idMap = {};
-
+function ClientField(aspect){
+	mycs.superClass(ClientField).constructor.apply(this, []);
 	SceneJS.createNode({
 		type: "scene",
 		id: "the-scene",
@@ -138,14 +135,24 @@ function Field(aspect){
 			            }]
 				    }]
 				},
-				/*
 				{
-		            type: "cube",	// base cube
+					id: 'base',
+		            type: "cube",
 					xSize: 0.1,
 					ySize : 0.1,
 					zSize : 0.1
 				},
-				*/
+				{
+					type: 'translate',
+					id: 'debug_cube-translate',
+				    nodes: [{
+			            id: "debug_cube",
+						type: 'cube',
+						xSize: 0.1,
+						ySize : 0.1,
+						zSize : 0.1
+					}]
+				},
 				{
 					type: "node",
 					id: "mount-node"
@@ -154,29 +161,9 @@ function Field(aspect){
 		}]
 	});
 }
-Field.prototype.getPiece = function(id){
-	return this._idMap[id];
-};
-Field.prototype.addPiece = function(piece, id){
-	ASSERT(!this._idMap[id]);
-	this._idMap[id] = piece;
-};
-Field.prototype.removePiece = function(id){
-	ASSERT(this._idMap[id]);
-	delete this._idMap[id];
-};
-Field.prototype.getPiecesByType = function(type){
-	var pieces = [];
-	for (var id in this._idMap) {
-		var piece = this._idMap[id];
-		if (piece.type === type) {
-			pieces.push(piece);
-		}
-	}
-	return pieces;
-};
+mycs.inherit(ClientField, cs.Field);
 
-function Piece(point, type, oid){
+function Unit(point, type, oid){
 	if (typeof oid != 'undefined') {
 		this.id = oid;
 	} else {
@@ -186,7 +173,7 @@ function Piece(point, type, oid){
 	this.type = type;
 	field.addPiece(this, this.id);
 }
-Piece.prototype.destroy = function(){
+Unit.prototype.destroy = function(){
 	field.removePiece(this.id);
 	SceneJS.Message.sendMessage({
 		command: "update",
@@ -196,7 +183,7 @@ Piece.prototype.destroy = function(){
 		}
 	});
 };
-Piece.prototype._createNode = function(node){
+Unit.prototype._createNode = function(node){
 	var nodes = [];
 
 	nodes.push({
@@ -232,13 +219,13 @@ Piece.prototype._createNode = function(node){
 	
 	createAndMountNodes(nodes, this.id);
 };
-Piece.prototype.updateScale = function(x, y, z) {
+Unit.prototype.updateScale = function(x, y, z) {
 	var scale = SceneJS.withNode(this.id + '-scale');
 	scale.set('x', x);	
 	scale.set('y', y);	
 	scale.set('z', z);
 };
-Piece.prototype.updatePosition = function(pos) {
+Unit.prototype.updatePosition = function(pos) {
 	this.pos = pos;
 	setNodeXYZ(this.id + '-translate', this.pos);
 };
@@ -248,7 +235,7 @@ function Bullet(point, id, owner_type){
 	this.ownerType = owner_type;
 	this._createNode();
 }
-mycs.inherit(Bullet, Piece);
+mycs.inherit(Bullet, Unit);
 Bullet.type = {
 	enemy: {
 		color: { r: 0.0, g: 0.0, b: 1.0 },
@@ -278,7 +265,7 @@ function Enemy(point, id){
 	var self = this;
 	this._createNode();
 }
-mycs.inherit(Enemy, Piece);
+mycs.inherit(Enemy, Unit);
 Enemy.X_ANGLE_BASE = 270.0;
 Enemy.prototype.destroy = function(){
 	if (this.throwTimer !== -1) {
@@ -454,6 +441,19 @@ ClientPlayer.prototype.updateLife = function(life){
 		displayMessage('You lose. Press F5 to retry.');
 	}
 };
+ClientPlayer.prototype.updateBasePosition = function(){
+	mycs.superClass(ClientPlayer).updateBasePosition.apply(this, []);
+	setNodeXYZ('debug_cube-translate', this.basePos); 
+};
+ClientPlayer.prototype.updateEye = function(){
+	var newPos = cs.calcRoatatePosition({x:0, y:this.angleY, z:0}, 20);
+	var eye = SceneJS.withNode('player_eye');
+	eye.set('eye', {x: this.basePos.x + newPos[0], y: 10, z: this.basePos.z + newPos[2]});
+	eye.set('look', this.joints['HEAD'].pos);
+};
+ClientPlayer.prototype.turn = function(diff){
+	mycs.superClass(ClientPlayer).turn.apply(this, [diff]);
+};
 
 var handleRemoteMessage = function(data){
 	remotePacketCounter.count(function(pps){
@@ -475,6 +475,10 @@ var handleRemoteMessage = function(data){
 			}
 			break;
 		}
+		break;
+	case 'turn':
+		player.turn(data.arg.diff);
+		player.updateEye();
 		break;
 	case 'joint_pos':	// for remote user
 		player.joints[data.arg.type].setPosition(data.arg.pos);
@@ -562,9 +566,9 @@ function handleLoad(e){
 	info.style.left = canvas_bound_rect.left + window.scrollX + 10 + 'px';
 	info.style.top = canvas_bound_rect.top + window.scrollY + 30 + 'px';
 	
-	field = new Field(canvas.width / canvas.height);
+	field = new ClientField(canvas.width / canvas.height);
 	player = new ClientPlayer();
-	kinect_proxy = new myc.SocketIoProxy(
+	kinectProxy = new myc.SocketIoProxy(
 		cs.DEVICE_PORT,
 		function(){
 			LOG('device proxy open');
@@ -573,14 +577,14 @@ function handleLoad(e){
 			devicePacketCounter.count(function(pps){
 				document.getElementById('packet_per_second_from_device').innerHTML = pps + ' Packets / Second from device';
 			});
-			remote_proxy.send(data);
+			remoteProxy.send(data);
 		},
 		function(){
 			LOG('device proxy close');
 		},
 		'127.0.0.1'
 	);
-	remote_proxy = new myc.SocketIoProxy(
+	remoteProxy = new myc.SocketIoProxy(
 		cs.REMOTE_PORT,
 		function(){
 			LOG('remote proxy open');
@@ -605,12 +609,36 @@ function handleKeydown(e){
 		e.preventDefault();
 		break;
 	case KeyEvent.DOM_VK_V:
+		remoteProxy.send({
+			type: 'bullet',
+			arg: {
+				id: myEnemyId
+			}
+		});
 		SceneJS.withNode('player_eye').set('eye', LOOK_AT_EYE);
+		e.preventDefault();
+		break;
+	case KeyEvent.DOM_VK_RIGHT:	// todo: update remote angle y
+		remoteProxy.send({
+			type: 'turn',
+			arg: {
+				diff: -10
+			}
+		});
+		e.preventDefault();
+		break;
+	case KeyEvent.DOM_VK_LEFT:
+		remoteProxy.send({
+			type: 'turn',
+			arg: {
+				diff: +10
+			}
+		});
 		e.preventDefault();
 		break;
 	case KeyEvent.DOM_VK_SPACE:
 		if (field.getPiece(myEnemyId)) {
-			remote_proxy.send({
+			remoteProxy.send({
 				type: 'bullet',
 				arg: {
 					id: myEnemyId
