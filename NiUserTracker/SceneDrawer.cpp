@@ -360,7 +360,7 @@ void DrawDepthMap(const xn::DepthMetaData& dmd, const xn::SceneMetaData& smd)
 				char buff[1024 * sizeof(jointMapTable) / sizeof(jointMapTable[0])];
 				int len = 0;
 				bool isFirst = true;
-				len += sprintf_s(buff + len, sizeof(buff) - len, "{\"type\":\"kinect_joint_postion\", \"arg\":[");
+				len += sprintf_s(buff + len, sizeof(buff) - len, "{\"type\":\"kinect_joint_postion\", \"arg\": {\"positions\": [");
 				for (int j = 0; j < tableLen; j++)
 				{
 					XnSkeletonJointPosition pos;
@@ -376,7 +376,7 @@ void DrawDepthMap(const xn::DepthMetaData& dmd, const xn::SceneMetaData& smd)
 					len += sprintf_s(buff + len, sizeof(buff) - len, "{\"name\":\"%s\", \"x\":%d, \"y\":%d, \"z\":%d}",
 						jointMapTable[j].text, (int)pos.position.X, (int)pos.position.Y, (int)pos.position.Z);
 				}
-				len += sprintf_s(buff + len, sizeof(buff) - len, "]}!");
+				len += sprintf_s(buff + len, sizeof(buff) - len, "]}}!");
 				g_tunnel->send(buff);
 			}
 			glBegin(GL_LINES);

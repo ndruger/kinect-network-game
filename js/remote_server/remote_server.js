@@ -10,7 +10,7 @@ var ASSERT = mycs.ASSERT;
 var DP = mycs.DP;
 
 var DEBUG = false;
-var field, player, proxy;
+var field, proxy;
 
 function ServerField(){
 	mycs.superClass(ServerField).constructor.apply(this, []);
@@ -142,26 +142,30 @@ Bullet.prototype.moving = function(old_pos){
 		this.destroy();
 		return false;
 	}
-	if (this.ownerType === 'enemy') {
-		if (player.checkShieldCollision(this.pos, Bullet.type[this.ownerType].r)) {
-			this.destroy();
-			return false;
-		}
-		if (player.checkDamageCollision(this.pos, Bullet.type[this.ownerType].r)) {
-			player.setDamege(Bullet.POWER);
-			this.destroy();
-			return false;
-		}
-	} else {
-		ASSERT(this.ownerType === 'player');
-		var enemies = field.getPiecesByType('enemy');
-		var len = enemies.length;
-		for (var i = 0; i < len; i++) {
-			var enemy = enemies[i];
-			if (enemy.checkCollision(this.pos, Bullet.type[this.ownerType].r)) {
-				enemy.setDamege(Bullet.POWER);
+	var palyers = field.getPiecesByType('player');
+	for (var j = 0, jLen = palyers.length; j < jLen; j++) {
+		var player = palyers[j];
+		if (this.ownerType === 'enemy') {
+			if (player.checkShieldCollision(this.pos, Bullet.type[this.ownerType].r)) {
 				this.destroy();
 				return false;
+			}
+			if (player.checkDamageCollision(this.pos, Bullet.type[this.ownerType].r)) {
+				player.setDamege(Bullet.POWER);
+				this.destroy();
+				return false;
+			}
+		} else {
+			ASSERT(this.ownerType === 'player');
+			var enemies = field.getPiecesByType('enemy');
+			var len = enemies.length;
+			for (var i = 0; i < len; i++) {
+				var enemy = enemies[i];
+				if (enemy.checkCollision(this.pos, Bullet.type[this.ownerType].r)) {
+					enemy.setDamege(Bullet.POWER);
+					this.destroy();
+					return false;
+				}
 			}
 		}
 	}
@@ -206,6 +210,9 @@ function Enemy(point, is_debug_enemy, oclient){
 }
 mycs.inherit(Enemy, Unit);
 Enemy.prototype.createBullet = function(){
+	var palyers = field.getPiecesByType('player');
+	var player = palyers[Math.floor(Math.random() * palyers.length)];
+	
 	var player_pos = player.getRandomServerJointPosition();
 	if (!player_pos) {
 		return;
@@ -335,12 +342,19 @@ function ServerPlayer(){
 		}
 	};
 	mycs.superClass(ServerPlayer).constructor.apply(this, [factory]);
+	this.type = 'player';
+	this.id = this.type + mycs.createId(cs.ID_SIZE);
 	this._gestureManager = new GestureManager(this);
+	field.addPiece(this, this.id);
 }
 mycs.inherit(ServerPlayer, cs.Player);
 ServerPlayer.prototype.destroy = function(){
-	ASSERT(false);	// todo: remove scene.js nodes
+	// todo: send remove message
 	this._gestureManager.destroy();
+	field.removePiece(this.id);
+};
+ServerPlayer.prototype.sendMap = function(){
+	// todo: implement
 };
 ServerPlayer.prototype.getRandomServerJointPosition = function(){
 	return this.joints[cs.Joint.types[Math.floor(Math.random() * cs.Joint.types.length)]].pos;
@@ -373,28 +387,54 @@ ServerPlayer.prototype.setDamege = function(damege){
 	proxy.broadcast({
 		type: 'update_life',
 		arg: {
+			id: this.id,
 			life: this.life
 		}
 	});
 };
 
-var handleMessage = function(data){
+var handleMessage = function(data, client){
+	var player;
 	switch (data.type) {
-	case 'kinect_joint_postion':
-		for (var i = 0, len = data.arg.length; i < len; i++) {
-			player.setJointPosition(data.arg[i]);
+	case 'create_player_request':
+		if (client.playerId) {
+			return;
 		}
-		proxy.broadcast(data);	// todo
+		player = new ServerPlayer();
+		client.playerId = player.id;
+		proxy.send(client, {
+			type: 'create_your_player',
+			arg: {
+				id: client.playerId
+			}
+		});
+		// todo: sendmap
+		break;
+	case 'kinect_joint_postion':
+		player = field.getPiece(client.playerId);
+		if (!player) {
+			return;
+		}
+		for (var i = 0, len = data.arg.positions.length; i < len; i++) {
+			player.setJointPosition(data.arg.positions[i]);
+		}
+		data.arg.id = client.playerId;
+		proxy.broadcast(data);
 		break;
 	case 'bullet':
-		var enemy = field.getPiece(data.arg.id);
+		var enemy = field.getPiece(client.enemyId);
 		if (enemy) {
 			enemy.createBullet();
 		}
 		break;
 	case 'turn':
+		player = field.getPiece(client.playerId);
+		if (!player) {
+			return;
+		}
 		player.turn(data.arg.diff);
-		proxy.broadcast(data);	// todo
+		data.arg.id = client.playerId;
+		proxy.broadcast(data);
 		break;
 	}
 };
@@ -415,6 +455,12 @@ proxy = new mys.SocketIoProxy(cs.REMOTE_PORT, function(client){
 				enemy.destroy();
 			}
 		}
+		if (client.playerId != -1) {
+			var player = field.getPiece(client.enemyId);
+			if (player) {
+				player.destroy();
+			}
+		}
 	}
 );
 
@@ -422,4 +468,3 @@ field = new ServerField();
 if (DEBUG) {
 	field.initEnemies();
 }
-player = new ServerPlayer();

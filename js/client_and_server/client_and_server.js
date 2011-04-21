@@ -178,8 +178,6 @@ Joint.prototype.getPosition = function(){
 };
 
 function Player(factory){
-	// todo: check dependency(id etc)
-	this.id = 'player';
 	this.life = Player.LIFE_MAX;
 	this.basePos = null;
 	this.angleY = 0;

@@ -49,15 +49,16 @@ if (isReplay) {
 				pos = 0;
 			}
 			buff = handleData(buff, data[0]);
-		}, 40);
+		}, 40);	// todo: save original time line
 	});
+} else {
+	net.createServer(function(socket){
+		var buff = '';
+		socket.on("data", function(data){
+			buff = handleData(buff, data);
+		});
+		socket.on('error', function (exc) {
+			sys.log("ignoring exception: " + exc);
+		});
+	}).listen(8841, "127.0.0.1");
 }
-net.createServer(function(socket){
-	var buff = '';
-	socket.on("data", function(data){
-		buff = handleData(buff, data);
-	});
-	socket.on('error', function (exc) {
-		sys.log("ignoring exception: " + exc);
-	});
-}).listen(8841, "127.0.0.1");

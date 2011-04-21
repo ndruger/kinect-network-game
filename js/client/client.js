@@ -7,7 +7,7 @@ var myc = myModules.myc;
 
 var DEBUG = true;
 
-var kinectProxy, remoteProxy, field, player, fpsCounter, remotePacketCounter, devicePacketCounter, myEnemyId;
+var deviceProxy, remoteProxy, field, playerId = -1, fpsCounter, remotePacketCounter, devicePacketCounter, myEnemyId;
 
 var FPS = 60;
 
@@ -419,7 +419,9 @@ ClientEdgePoints.prototype.setPosition = function(fromPos, toPos){
 	}
 };
 
-function ClientPlayer(){
+function ClientPlayer(id){
+	this.type = 'player';
+	this.id = id;
 	var factory = {
 		createJoint: function(type, player){
 			return new ClientJoint(type, player);
@@ -430,10 +432,12 @@ function ClientPlayer(){
 		}
 	};
 	mycs.superClass(ClientPlayer).constructor.apply(this, [factory]);
+	field.addPiece(this, this.id);
 }
 mycs.inherit(ClientPlayer, cs.Player);
 ClientPlayer.prototype.destroy = function(){
 	ASSERT(false);	// todo: remove scene.js nodes
+	field.removePiece(this.id);
 };
 ClientPlayer.prototype.updateLife = function(life){
 	document.getElementById('life_bar_life').style.width = life * (100 / cs.Player.LIFE_MAX) + '%';
@@ -459,11 +463,19 @@ var handleRemoteMessage = function(data){
 	remotePacketCounter.count(function(pps){
 		document.getElementById('packet_per_second_from_remote').innerHTML = pps + ' Packets / Second from remote';
 	});
-	var bullet, enemy;
+	var bullet, enemy, player;
 	switch (data.type) {
+	case 'create_your_player':
+		player = new ClientPlayer(data.arg.id);
+		playerId = player.id;
+		break;
 	case 'kinect_joint_postion':
-		for (var i = 0, len = data.arg.length; i < len; i++) {
-			player.setJointPosition(data.arg[i]);
+		player = field.getPiece(data.arg.id);
+		if (!player) {
+			return;
+		}
+		for (var i = 0, len = data.arg.positions.length; i < len; i++) {
+			player.setJointPosition(data.arg.positions[i]);
 		}
 		break;
 	case 'update_position':
@@ -477,13 +489,25 @@ var handleRemoteMessage = function(data){
 		}
 		break;
 	case 'turn':
+		player = field.getPiece(data.arg.id);
+		if (!player) {
+			return;
+		}
 		player.turn(data.arg.diff);
 		player.updateEye();
 		break;
 	case 'joint_pos':	// for remote user
+		player = field.getPiece(data.arg.id);
+		if (!player) {
+			return;
+		}
 		player.joints[data.arg.type].setPosition(data.arg.pos);
 		break;
 	case 'edge_point_pos':
+		player = field.getPiece(data.arg.id);
+		if (!player) {
+			return;
+		}
 		player.edge_points[data.arg.type].setPosition(data.arg.index, data.arg.pos);
 		break;
 	case 'send_map':	// through
@@ -520,6 +544,10 @@ var handleRemoteMessage = function(data){
 		}
 		break;
 	case 'update_life':
+		player = field.getPiece(data.arg.id);
+		if (!player) {
+			return;
+		}
 		player.updateLife(data.arg.life);
 		break;
 	case 'bind_enemy':
@@ -530,6 +558,25 @@ var handleRemoteMessage = function(data){
 		break;
 	}
 };
+
+function handleDeviceMessage(data){
+	devicePacketCounter.count(function(pps){
+		document.getElementById('packet_per_second_from_device').innerHTML = pps + ' Packets / Second from device';
+	});
+	if (data.type === 'kinect_joint_postion') {
+		if (playerId === -1) {
+			remoteProxy.send({
+				type: 'create_player_request',
+				arg: {
+					id: myEnemyId
+				}
+			});
+		
+		} else {
+			remoteProxy.send(data);
+		}
+	}
+}
 
 function render() {
 	fpsCounter.count(function(fps){
@@ -567,18 +614,12 @@ function handleLoad(e){
 	info.style.top = canvas_bound_rect.top + window.scrollY + 30 + 'px';
 	
 	field = new ClientField(canvas.width / canvas.height);
-	player = new ClientPlayer();
-	kinectProxy = new myc.SocketIoProxy(
+	deviceProxy = new myc.SocketIoProxy(
 		cs.DEVICE_PORT,
 		function(){
 			LOG('device proxy open');
 		},
-		function(data){
-			devicePacketCounter.count(function(pps){
-				document.getElementById('packet_per_second_from_device').innerHTML = pps + ' Packets / Second from device';
-			});
-			remoteProxy.send(data);
-		},
+		handleDeviceMessage,
 		function(){
 			LOG('device proxy close');
 		},
