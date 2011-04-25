@@ -1,19 +1,23 @@
 /*global DP, io, cs, SceneJS, ASSERT, DPD, LOG, BlenderExport, myModules, KeyEvent */
-/*global Enemy */
+/*global Enemy, render */
 (function(){
+var DEBUG = true;
 var cs = myModules.cs;
 var mycs = myModules.mycs;
 var myc = myModules.myc;
-
-var DEBUG = true;
-
-var deviceProxy, remoteProxy, field, playerId = -1, fpsCounter, remotePacketCounter, devicePacketCounter, myEnemyId;
+var deviceProxy, remoteProxy, field, myPlayerId = -1, counter, myEnemyId, renderingTimer = -1;
 
 var FPS = 60;
 
 var SCALE = 0.008;
 var EYE_Z = 70;	// todo: check SCALE
 var LOOK_AT_EYE = { x: 0.0, y: 10, z: EYE_Z };
+
+var devicePort = cs.DEVICE_PORT;
+var query = myc.parseQuery();
+if (query.port) {
+	devicePort = query.port;
+}
 
 // todo: create objects
 function setNodeXYZ(id, pos){
@@ -35,6 +39,15 @@ function createAndMountNodes(node, id){
 		command: 'update',
 		target: 'mount-node',
 		add: {
+			node: id
+		}
+	});
+}
+function removeNode(id){
+	SceneJS.Message.sendMessage({
+		command: "update",
+		target: 'mount-node',
+		remove: {
 			node: id
 		}
 	});
@@ -176,13 +189,7 @@ function Unit(point, type, oid){
 }
 Unit.prototype.destroy = function(){
 	field.removePiece(this.id);
-	SceneJS.Message.sendMessage({
-		command: "update",
-		target: 'mount-node',
-		remove: {
-			node: this.id
-		}
-	});
+	removeNode(this.id);
 };
 Unit.prototype._createNode = function(node){
 	var nodes = [];
@@ -377,7 +384,7 @@ function ClientJoint(type, player){
 }
 mycs.inherit(ClientJoint, cs.Joint);
 ClientJoint.prototype.destroy = function(){
-	ASSERT(false);	// destroy node
+	removeNode(this.id);
 };
 ClientJoint.prototype._createNode = function(factory){
 	var nodes = [];
@@ -396,7 +403,7 @@ function ClientEdgePoints(type){
 }
 mycs.inherit(ClientEdgePoints, cs.EdgePoints);
 ClientEdgePoints.prototype.destroy = function(){
-	ASSERT(false);	// destroy node
+	removeNode(this.id);
 };
 ClientEdgePoints.prototype._createNode = function(){
 	var nodes = [];
@@ -428,7 +435,7 @@ ClientEdgePoints.prototype.render = function(){
 	}
 };
 
-function ClientPlayer(id){
+function ClientPlayer(id, opt_basePos, opt_angleY){
 	this.type = 'player';
 	this.id = id;
 	this.noPos = true;
@@ -441,12 +448,25 @@ function ClientPlayer(id){
 			
 		}
 	};
-	mycs.superClass(ClientPlayer).constructor.apply(this, [factory]);
+	mycs.superClass(ClientPlayer).constructor.apply(this, [factory, opt_basePos, opt_angleY]);
 	field.addPiece(this, this.id);
 }
 mycs.inherit(ClientPlayer, cs.Player);
 ClientPlayer.prototype.destroy = function(){
-	ASSERT(false);	// todo: remove scene.js nodes
+	for (var k in this.joints) {
+		var joint = this.joints[k];
+		if (!joint) {
+			continue;
+		}
+		joint.destroy();
+	}
+	for (k in this.edgePoints) {
+		var edgePoint = this.edgePoints[k];
+		if (!edgePoint) {
+			continue;
+		}
+		edgePoint.destroy();
+	}
 	field.removePiece(this.id);
 };
 ClientPlayer.prototype.updateLife = function(life){
@@ -463,19 +483,24 @@ ClientPlayer.prototype.setJointPosition = function(positions){
 	}
 };
 ClientPlayer.prototype.updateEye = function(){
-	if (this.isMyPlayer()) {
+	if (this.isMyPlayer() && this.joints['HEAD'].pos) {
+		var headPos = this.joints['HEAD'].pos;
 		var newPos = cs.calcRoatatePosition({x:0, y:this.angleY, z:0}, 30);
 		var eye = SceneJS.withNode('player_eye');
-		eye.set('eye', {x: newPos[0], y: 10, z: newPos[2]});
-		eye.set('look', this.joints['HEAD'].pos);
+		eye.set('eye', {x: headPos.x + newPos[0], y: 15, z: headPos.z + newPos[2]});
+		eye.set('look', headPos);
 	}
 };
 ClientPlayer.prototype.turn = function(diff){
 	mycs.superClass(ClientPlayer).turn.apply(this, [diff]);
-	this.updateEye(true);
+	this.updateEye();
+};
+ClientPlayer.prototype.setBasePosition = function(pos){
+	mycs.superClass(ClientPlayer).setBasePosition.apply(this, [pos]);
+	this.updateEye();
 };
 ClientPlayer.prototype.isMyPlayer = function(){
-	return (this.id === playerId);
+	return (this.id === myPlayerId);
 };
 ClientPlayer.prototype.render = function(){
 	for (var k in this.joints) {
@@ -491,17 +516,60 @@ ClientPlayer.prototype.render = function(){
 	}
 };
 
+function Counter(){
+	this.fpsCounter = new mycs.XPSCounter();
+	this.remotePacketCounter = new mycs.XPSCounter();
+	this.devicePacketCounter = new mycs.XPSCounter();
+}
+Counter.FPS = 0;
+Counter.REMOTE_PACKET = 1;
+Counter.DEVIDE_PACKET = 2;
+Counter.prototype.render = function(){
+	this.fpsCounter.update();
+	this.remotePacketCounter.update();
+	this.devicePacketCounter.update();
+	document.getElementById('packet_per_second_from_remote').innerHTML = this.remotePacketCounter.prevCount + ' Packet Frames / Second from remote';
+	document.getElementById('packet_per_second_from_device').innerHTML = this.devicePacketCounter.prevCount + ' Packet Frames / Second from device';
+	document.getElementById('fps').innerHTML = this.fpsCounter.prevCount + ' / ' + FPS + ' fps (Exclude Event\'s update)';
+};
+Counter.prototype.increment = function(type){
+	switch (type) {
+	case Counter.FPS:
+		this.fpsCounter.increment();
+		break;
+	case Counter.REMOTE_PACKET:
+		this.remotePacketCounter.increment();
+		break;
+	case Counter.DEVIDE_PACKET:
+		this.devicePacketCounter.increment();
+		break;
+	}
+};
+
+function RenderingTimer(){
+	this.timer = -1;
+}
+RenderingTimer.prototype.start = function(){
+	if (this.timer === -1) {
+		this.timer = setInterval(function(){ render(); }, 1000 / FPS);
+	}
+};
+RenderingTimer.prototype.stop = function(){
+	if (this.timer !== -1) {
+		clearInterval(this.timer);
+		this.timer = -1;
+	}
+};
+
 var handleRemoteMessage = function(data){
-	remotePacketCounter.count(function(pps){
-		document.getElementById('packet_per_second_from_remote').innerHTML = pps + ' Packets / Second from remote';
-	});
+	counter.increment(Counter.REMOTE_PACKET);
+	if (data.type !== 'kinect_joint_postion' && data.arg.type === 'player') {
+		DP(data.type);
+	}
 	var bullet, enemy, player;
 	switch (data.type) {
 	case 'set_player_id':
-		playerId = data.arg.id;
-		break;
-	case 'create_player':
-		new ClientPlayer(data.arg.id);
+		myPlayerId = data.arg.id;
 		break;
 	case 'kinect_joint_postion':
 		player = field.getPiece(data.arg.id);
@@ -509,6 +577,13 @@ var handleRemoteMessage = function(data){
 			return;
 		}
 		player.setJointPosition(data.arg.positions);
+		break;
+	case 'set_base_position':
+		player = field.getPiece(data.arg.id);
+		if (!player) {
+			return;
+		}
+		player.setBasePosition(data.arg.pos);
 		break;
 	case 'update_position':
 		switch(data.arg.type){
@@ -550,28 +625,18 @@ var handleRemoteMessage = function(data){
 		case 'bullet':
 			new Bullet(data.arg.pos, data.arg.id, data.arg.ownerType);
 			break;
+		case 'player':
+			new ClientPlayer(data.arg.id, data.arg.basePos, data.arg.angleY);
+			break;
 		default:
 			ASSERT(false);
 			break;
 		}
 		break;
 	case 'destroy':
-		switch(data.arg.type){
-		case 'enemy':
-			enemy = field.getPiece(data.arg.id);
-			if (enemy) {
-				enemy.destroy();
-			}
-			break;
-		case 'bullet':
-			bullet = field.getPiece(data.arg.id);
-			if (bullet) {
-				bullet.destroy();
-			}
-			break;
-		default:
-			ASSERT(false);
-			break;
+		var piece = field.getPiece(data.arg.id);
+		if (piece) {
+			piece.destroy();
 		}
 		break;
 	case 'update_life':
@@ -610,12 +675,10 @@ function adjustKinectPositions(positions){
 }
 
 function handleDeviceMessage(data){
-	devicePacketCounter.count(function(pps){
-		document.getElementById('packet_per_second_from_device').innerHTML = pps + ' Packets / Second from device';
-	});
+	counter.increment(Counter.DEVIDE_PACKET);
 	switch (data.type) {
 	case 'kinect_joint_postion':
-		if (playerId === -1) {
+		if (myPlayerId === -1) {
 			remoteProxy.send({	// todo: fix duplication of invoking
 				type: 'create_player_request',
 				arg: {
@@ -626,6 +689,10 @@ function handleDeviceMessage(data){
 		} else {
 			adjustKinectPositions(data.arg.positions);
 			remoteProxy.send(data);
+			var player = field.getPiece(myPlayerId);
+			if (player) {
+				player.setJointPosition(data.arg.positions);	// server don't send client kinect data to it self for reducing latency.
+			}
 		}
 		break;
 	}
@@ -637,25 +704,22 @@ function render() {
 	for (var i = 0, len = pieces.length; i < len; i++) {
 		pieces[i].render();
 	}
-	fpsCounter.count(function(fps){
-		document.getElementById('fps').innerHTML = fps + ' / ' + FPS + ' fps (Exclude Event\'s update)';
-		if (DEBUG) {
-			/*
-			var object_count = 0;
-			for (var k in field._idMap) {
-				object_count++;
-			}
-			document.getElementById('output').innerHTML = object_count;
-			*/
+	counter.increment(Counter.FPS);
+	counter.render();
+	if (DEBUG) {
+		/*
+		var object_count = 0;
+		for (var k in field._idMap) {
+			object_count++;
 		}
-	});
+		document.getElementById('output').innerHTML = object_count;
+		*/
+	}
 	SceneJS.withNode("the-scene").render();
 }
 
 function handleLoad(e){
-	fpsCounter = new mycs.XPSCounter();
-	remotePacketCounter = new mycs.XPSCounter();
-	devicePacketCounter = new mycs.XPSCounter();
+	counter = new Counter();
 	var canvas = document.getElementById('main_canvas');
 	canvas.width = document.body.clientWidth;
 	canvas.height = document.body.clientHeight;
@@ -672,21 +736,21 @@ function handleLoad(e){
 	info.style.top = canvas_bound_rect.top + window.scrollY + 30 + 'px';
 	
 	field = new ClientField(canvas.width / canvas.height);
-	deviceProxy = new myc.SocketIoProxy(
-		cs.DEVICE_PORT,
-		function(){
-			LOG('device proxy open');
-		},
-		handleDeviceMessage,
-		function(){
-			LOG('device proxy close');
-		},
-		'127.0.0.1'
-	);
-	remoteProxy = new myc.SocketIoProxy(
+	remoteProxy = new myc.WebSocketProxy(
 		cs.REMOTE_PORT,
 		function(){
 			LOG('remote proxy open');
+			deviceProxy = new myc.WebSocketProxy(
+				devicePort,
+				function(){
+					LOG('device proxy open');
+				},
+				handleDeviceMessage,
+				function(){
+					LOG('device proxy close');
+				},
+				'127.0.0.1'
+			);
 		},
 		handleRemoteMessage,
 		function(){
@@ -694,7 +758,8 @@ function handleLoad(e){
 		}
 	);
 
-	setInterval(function(){ render(); }, 1000 / FPS);
+	renderingTimer = new RenderingTimer();
+	renderingTimer.start();
 }
 window.addEventListener('load', handleLoad, false);
 
@@ -722,6 +787,15 @@ function handleKeydown(e){
 			type: 'move_request',
 			arg: {
 				dir: 'up'
+			}
+		});
+		e.preventDefault();
+		break;
+	case KeyEvent.DOM_VK_DOWN:
+		remoteProxy.send({
+			type: 'move_request',
+			arg: {
+				dir: 'down'
 			}
 		});
 		e.preventDefault();
@@ -757,6 +831,13 @@ function handleKeydown(e){
 	}
 }
 window.addEventListener('keydown', handleKeydown, false);
+
+window.addEventListener('focus', function(){
+	renderingTimer.start();
+}, false);
+window.addEventListener('blur', function(){
+	renderingTimer.stop();
+}, false);
 
 })();
 

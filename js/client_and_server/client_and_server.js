@@ -186,9 +186,18 @@ Joint.prototype.getPosition = function(){
 	return this.pos;
 };
 
-function Player(factory){
+function Player(factory, opt_basePos, opt_angleY){
 	this.life = Player.LIFE_MAX;
-	this.angleY = 0;
+	if (typeof opt_basePos !== 'undefined') {
+		this.angleY = opt_angleY;
+	} else {
+		this.angleY = 0;
+	}
+	if (typeof opt_basePos !== 'undefined') {
+		this.basePos = mycs.deepCopy(opt_basePos);
+	} else {
+		this.basePos = {x: 0, y: 0, z:0};
+	}
 
 	this.oldFootY = {
 		LEFT_FOOT: 0,
@@ -232,7 +241,7 @@ Player.prototype.updateJointsPosition = function(){
 		}
 		if (joint.origPos) {
 			var newPos = this.rotatePosition({x: joint.origPos.x, y: joint.origPos.y, z: joint.origPos.z});
-			joint.setPosition({x: newPos[0], y: newPos[1], z: newPos[2]});
+			joint.setPosition({x: newPos[0] + this.basePos.x, y: newPos[1] + this.basePos.y, z: newPos[2] + this.basePos.z});
 		}
 	}
 	for (var i = 0, len = this.edgePoints.length; i < len; i++) {
@@ -267,4 +276,9 @@ Player.prototype.turn = function(diff){
 	this.angleY += diff;
 	this.updateJointsPosition();
 };
+Player.prototype.setBasePosition = function(pos){
+	this.basePos = mycs.deepCopy(pos);
+	this.updateJointsPosition();
+};
+
 })();

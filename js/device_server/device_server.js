@@ -5,19 +5,23 @@ var fs = require('fs');
 var csmy = require('../lib/my/my_client_and_server');
 var cs = require('../client_and_server/client_and_server');
 var mys = require('../lib/my/my_server');
+var argv = require('optimist').argv;
 
 var replayPath, proxy, ws;
 var isReplay = false;
 
-if (process.argv[2] === '-w') {
-	ws = fs.createWriteStream(process.argv[3]);
-} else if (process.argv[2] === '-r') {
-	isReplay = true;
-	replayPath = process.argv[3];
+if (argv.w) {
+	ws = fs.createWriteStream(argv.w);
 }
+if (argv.r) {
+	isReplay = true;
+	replayPath = argv.r;
+}
+var BROWSER_PORT = (argv.b) ? argv.b: cs.DEVICE_PORT;
+var KINECT_PORT = (argv.k) ? argv.k: 8841;
 
 // Proxy for sending data to Browser
-proxy = new mys.SocketIoProxy(cs.DEVICE_PORT, null, null, null);
+proxy = new mys.WebSocketProxy(BROWSER_PORT, null, null, null);
 
 // receive from OpenNI
 var handleData = (function(){
@@ -49,7 +53,7 @@ if (isReplay) {
 				pos = 0;
 			}
 			buff = handleData(buff, data[0]);
-		}, 40);	// todo: save original time line
+		}, 10);	// todo: save original time line
 	});
 } else {
 	net.createServer(function(socket){
@@ -60,5 +64,5 @@ if (isReplay) {
 		socket.on('error', function (exc) {
 			sys.log("ignoring exception: " + exc);
 		});
-	}).listen(8841, "127.0.0.1");
+	}).listen(KINECT_PORT, "127.0.0.1");
 }

@@ -149,4 +149,19 @@ SocketIoProxy.prototype.close = function(){
 	this._socket.disconnect();
 };
 
+module.parseQuery = function(){
+	var words = location.href.split('?');
+	var query = {};
+	for (var i = 1, iLen = words.length; i < iLen; i++) {
+		var word = words[i];
+		if(word.match(/\=/)) {
+			var ts = word.split('=');
+			if (ts[1]) {
+				query[ts[0]] = ts[1];
+			}
+		}
+	}
+	return query;
+};
+
 })();

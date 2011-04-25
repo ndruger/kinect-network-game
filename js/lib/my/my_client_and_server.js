@@ -67,18 +67,25 @@ module.superClass = function(subClass){
 function XPSCounter(){
 	this.countFrame = 0;
 	this.oldTime = -1;
+	this.prevCount = 0;
 }
-XPSCounter.prototype.count = function(proc){
+XPSCounter.prototype.update = function(opt_proc){
 	if (this.oldTime !== -1) {
 		var current = Date.now();
 		if (current - this.oldTime > 1000) {
-			proc(this.countFrame);
+			if (opt_proc) {
+				opt_proc(this.countFrame);
+			}
+			this.prevCount = this.countFrame;
 			this.countFrame = 0;
 			this.oldTime += 1000;
 		}
 	} else {
 		this.oldTime = Date.now();
 	}
+};
+XPSCounter.prototype.increment = function(proc){
+	this.update(proc);
 	this.countFrame++;
 };
 module.XPSCounter = XPSCounter;
@@ -88,7 +95,7 @@ function deepCopy(o){
 		var new_array = [];
 		var len = o.length;
 		for (var i = 0; i < len; i++) {
-			new_array[i] = exports.deepCopy(o[i]);
+			new_array[i] = deepCopy(o[i]);
 		}
 		return new_array;
 	} else if (typeof o === 'object') {
@@ -137,7 +144,7 @@ IntervalTimer.prototype.clearInterval = function(do_last_action){
 module.IntervalTimer = IntervalTimer;
 
 // IndexPool
-function IndexPool(start, end){
+function IndexPool(start, end){	// slow
 	this.pool = {};
 	this.start = start;
 	this.end = end;
@@ -166,6 +173,14 @@ module.createId = function(n){
 		id += table.charAt(Math.floor(table.length * Math.random()));
 	}
 	return id;
+};
+
+/*global DP, LOG, ASSERT, DIR, DPD */
+module.setShorthands = function(namespace){
+	var shorthands = ['DP', 'LOG', 'ASSERT', 'DIR', 'DPD'];
+	for (var i = 0, len = shorthands.length; i < len; i++) {
+		namespace[shorthands[i]] = module[shorthands[i]];
+	}
 };
 
 })();

@@ -74,10 +74,7 @@
 		<script type="text/javascript" defer src="../client_and_server/lib/glMatrix-0.9.4.min.js"></script>
 		<script type="text/javascript" src="../lib/my/my_client_and_server.js"></script>
 		<script type="text/javascript">
-			var shorthands = ['DP', 'LOG', 'ASSERT', 'DIR', 'DPD'];
-			for (var i = 0, len = shorthands.length; i < len; i++) {
-				window[shorthands[i]] = myModules.mycs[shorthands[i]];
-			}
+		myModules.mycs.setShorthands(window);
 		</script>
 		<script type="text/javascript" defer src="../lib/my/my_client.js"></script>
 		<script type="text/javascript" src="../client_and_server/client_and_server.js"></script>

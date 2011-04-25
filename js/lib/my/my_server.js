@@ -1,21 +1,33 @@
-/*global exports, JSON, console, require */
+/*global exports, JSON, console, myModules, require */
 var io = require('socket.io');
 var ws = require('websocket-server');
 var http = require('http');
 var sys = require('sys');
 
+var mycs;
+if (typeof myModules != 'undefined') {
+	mycs = myModules.mycs;
+} else {
+	mycs = require('./my_client_and_server');
+}
+var ASSERT = mycs.ASSERT;
+var DP = mycs.DP;
+var DPD = mycs.DPD;
+
 function WebSocketProxy(port, openProc, messageProc, closeProc, opt_maxConnection){
 	this.server = ws.createServer();
 	this.maxConnection = (typeof opt_maxConnection == 'undefined') ? -1: opt_maxConnection;
 	this.connectionCount = 0;
+	this.clients = {};
 	var self = this;
 	this.server.on('connection', function(client){
-		if (this.maxConnection !== -1) {
+		if (self.maxConnection !== -1) {
 			if (self.connectionCount + 1 >= self.maxConnection) {
 				client.reject();
 				return;
 			}
 		}
+		self.clients[client.id] = client;
 		self.connectionCount ++;
 		client.on('message', function(message){
 			if (messageProc) {
@@ -30,6 +42,7 @@ function WebSocketProxy(port, openProc, messageProc, closeProc, opt_maxConnectio
 			}
 		});
 		client.on('close', function(){
+			delete self.clients[client.id];
 			self.connectionCount --;
 			if (closeProc) {
 				closeProc(client);
@@ -56,6 +69,13 @@ WebSocketProxy.prototype.send = function(client, data){
 		client.send(JSON.stringify(data));
 	} else {
 		client.send(data);
+	}
+};
+WebSocketProxy.prototype.broadcastExceptFor = function(client, data){
+	for (var id in this.clients) {
+		if (id !== client.id) {
+			this.send(this.clients[id], data);
+		}
 	}
 };
 
@@ -107,6 +127,13 @@ SocketIoProxy.prototype.send = function(client, data){
 		client.send(JSON.stringify(data));
 	} else {
 		client.send(data);
+	}
+};
+SocketIoProxy.prototype.broadcastExceptFor = function(client, data){
+	for (var id in client.listener.clients) {
+		if (id !== client.sessionId) {
+			this.send(client.listener.clients[id], data);
+		}
 	}
 };
 

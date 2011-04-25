@@ -1,4 +1,5 @@
-/*global require, process */
+/*global require, process, global */
+/*global DP, LOG, ASSERT, DIR, DPD */
 /*global Enemy */
 var http = require('http');
 var sys = require('sys');
@@ -7,7 +8,7 @@ var mycs = require('../lib/my/my_client_and_server');
 var mys = require('../lib/my/my_server');
 var cs = require('../client_and_server/client_and_server');
 var ASSERT = mycs.ASSERT;
-var DP = mycs.DP;
+mycs.setShorthands(global);
 
 var DEBUG = false;
 var field, proxy;
@@ -25,8 +26,8 @@ ServerField.prototype.initEnemies = function(){
 	}
 };
 ServerField.prototype.sendMap = function(conn){
-	for (var id in this._idMap) {
-		this._idMap[id].sendMap(conn);
+	for (var id in this._pieces) {
+		this._pieces[id].sendMap(conn);
 	}
 };
 
@@ -268,7 +269,7 @@ ServerEdgePoints.prototype.checkCollision = function(pos, r){
 	return false;
 };
 
-// todo: refactoring
+// todo: refactoring & move to client.js
 function GestureManager(player){
 	this.player = player;
 	this.positionSnapshots = [];
@@ -331,7 +332,7 @@ GestureManager.prototype.DetectAction = function(){
 	}
 };
 
-function ServerPlayer(){
+function ServerPlayer(client){
 	var factory = {
 		createJoint: function(type, player){
 			return new ServerJoint(type, player);
@@ -344,20 +345,43 @@ function ServerPlayer(){
 	mycs.superClass(ServerPlayer).constructor.apply(this, [factory]);
 	this.type = 'player';
 	this.id = this.type + mycs.createId(cs.ID_SIZE);
+	proxy.send(client, {
+		type: 'set_player_id',
+		arg: {
+			id: this.id
+		}
+	});
+	proxy.broadcast({
+		type: 'create',
+		arg: {
+			type: this.type,
+			id: this.id
+		}
+	});
 	this._gestureManager = new GestureManager(this);
 	field.addPiece(this, this.id);
+	
 }
 mycs.inherit(ServerPlayer, cs.Player);
 ServerPlayer.prototype.destroy = function(){
-	// todo: send remove message
 	this._gestureManager.destroy();
 	field.removePiece(this.id);
-};
-ServerPlayer.prototype.sendMap = function(){
 	proxy.broadcast({
-		type: 'create_player',
+		type: 'destroy',
 		arg: {
+			type: this.type,
 			id: this.id
+		}
+	});
+};
+ServerPlayer.prototype.sendMap = function(client){
+	proxy.send(client, {
+		type: 'send_map',
+		arg: {
+			id: this.id,
+			type: this.type,
+			basePos: this.basePos,
+			angleY: this.angleY
 		}
 	});
 };
@@ -397,6 +421,29 @@ ServerPlayer.prototype.setDamege = function(damege){
 		}
 	});
 };
+ServerPlayer.prototype.move = function(dir){
+	var angle = this.angleY;
+	if (dir === 'up') {
+		angle -= 180;
+	}
+	var diff = cs.calcRoatatePosition({
+		x: 0,
+		y: angle,
+		z: 0
+	}, 2);
+	mycs.superClass(ServerPlayer).setBasePosition.apply(this, [{
+		x: this.basePos.x + diff[0],
+		y: this.basePos.y + diff[1],
+		z: this.basePos.z + diff[2]
+	}]);
+	proxy.broadcast({
+		type: 'set_base_position',
+		arg: {
+			id: this.id,
+			pos: this.basePos
+		}
+	});
+};
 
 var handleMessage = function(data, client){
 	var player;
@@ -405,15 +452,8 @@ var handleMessage = function(data, client){
 		if (client.playerId) {
 			return;
 		}
-		player = new ServerPlayer();
+		player = new ServerPlayer(client);
 		client.playerId = player.id;
-		proxy.send(client, {
-			type: 'set_player_id',
-			arg: {
-				id: client.playerId
-			}
-		});
-		player.sendMap();
 		break;
 	case 'kinect_joint_postion':
 		player = field.getPiece(client.playerId);
@@ -422,7 +462,7 @@ var handleMessage = function(data, client){
 		}
 		player.setJointPosition(data.arg.positions);
 		data.arg.id = client.playerId;
-		proxy.broadcast(data);
+		proxy.broadcastExceptFor(client, data);
 		break;
 	case 'bullet':
 		var enemy = field.getPiece(client.enemyId);
@@ -436,8 +476,6 @@ var handleMessage = function(data, client){
 			return;
 		}
 		player.move(data.arg.dir);
-		data.arg.id = client.playerId;
-		proxy.broadcast(data);
 		break;
 	case 'turn':
 		player = field.getPiece(client.playerId);
@@ -451,7 +489,7 @@ var handleMessage = function(data, client){
 	}
 };
 
-proxy = new mys.SocketIoProxy(cs.REMOTE_PORT, function(client){
+proxy = new mys.WebSocketProxy(cs.REMOTE_PORT, function(client){
 		DP('connected');
 		field.sendMap(client);
 		client.enemyId = -1;
@@ -468,7 +506,7 @@ proxy = new mys.SocketIoProxy(cs.REMOTE_PORT, function(client){
 			}
 		}
 		if (client.playerId != -1) {
-			var player = field.getPiece(client.enemyId);
+			var player = field.getPiece(client.playerId);
 			if (player) {
 				player.destroy();
 			}
