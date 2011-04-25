@@ -21,11 +21,12 @@ function WebSocketProxy(port, openProc, messageProc, closeProc, opt_maxConnectio
 			if (messageProc) {
 				try {
 					var data = JSON.parse(message);
-					messageProc(data, client);
 				}
 				catch (e) {
 					console.log('ignoring exception: ' + e);
+					return;
 				}
+				messageProc(data, client);
 			}
 		});
 		client.on('close', function(){
@@ -73,11 +74,12 @@ function SocketIoProxy(port, openProc, messageProc, closeProc, opt_server){
 			if (messageProc) {
 				try {
 					var data = JSON.parse(message);
-					messageProc(data, client);
 				}
 				catch (e) {
 					console.log('ignoring exception: ' + e);
+					return;
 				}
+				messageProc(data, client);
 			}
 		});
 		client.on('disconnect', function(){

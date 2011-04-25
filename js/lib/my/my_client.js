@@ -90,11 +90,12 @@ function WebSocketProxy(port, openProc, messageProc, closeProc, opt_fullDomain){
 		if (messageProc) {
 			try {
 				var data = JSON.parse(message.data);
-				messageProc(data);
 			}
 			catch (e) {
 				LOG('ignoring exception: ' + e);
+				return;
 			}
+			messageProc(data);
 		}
 	};
 	this._ws.onclose = closeProc;
@@ -126,11 +127,12 @@ function SocketIoProxy(port, openProc, messageProc, closeProc, opt_fullDomain){
 		if (messageProc) {
 			try {
 				var data = JSON.parse(message);
-				messageProc(data);
 			}
 			catch (e) {
 				LOG('ignoring exception: ' + e);
+				return;
 			}
+			messageProc(data);
 		}
 	});
 	this._socket.on('disconnect', function(){ closeProc(); });

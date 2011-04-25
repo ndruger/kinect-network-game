@@ -12,6 +12,7 @@ if (typeof myModules != 'undefined') {
 	mycs = require('../lib/my/my_client_and_server');
 }
 var ASSERT = mycs.ASSERT;
+var DP = mycs.DP;
 exports.REMOTE_PORT = 8761;
 exports.DEVICE_PORT = 8869;
 exports.FIELD_SIZE = 100;
@@ -139,10 +140,18 @@ Field.prototype.getPiecesByType = function(type){
 	}
 	return pieces;
 };
+Field.prototype.getAllPieces = function(){
+	var pieces = [];
+	for (var id in this._pieces) {
+		pieces.push(this._pieces[id]);
+	}
+	return pieces;
+};
 
 function Joint(type, player){
 	this.type = type;
 	this.pos = null;
+	this.origPos = null;
 	this.id = this.type + mycs.createId(ID_SIZE);
 	if (this.type === 'LEFT_HAND') {
 		this.harfSize = Joint.SIELD_H_SIZE;
@@ -179,7 +188,6 @@ Joint.prototype.getPosition = function(){
 
 function Player(factory){
 	this.life = Player.LIFE_MAX;
-	this.basePos = null;
 	this.angleY = 0;
 
 	this.oldFootY = {
@@ -201,48 +209,39 @@ function Player(factory){
 }
 exports.Player = Player;
 Player.LIFE_MAX = 200;
-Player.prototype.setJointPosition = function(update){
-	var joint = mycs.deepCopy(update);
-	joint.x *= SCALE; joint.y *= SCALE;	joint.z *= SCALE;
-	if (this.basePos) {
-		var newPos = this.rotatePosition({x: joint.x, y: joint.y, z: joint.z});
-		joint.x = newPos[0]; joint.y = newPos[1]; joint.z = newPos[2];
-	}
+Player.prototype.setJointPosition = function(positions){
+	for (var j = 0, jLen = positions.length; j < jLen; j++) {
+		var joint = mycs.deepCopy(positions[j]);
+		joint.x *= SCALE; joint.y *= SCALE;	joint.z *= SCALE;
+		
+		if (joint.name === 'LEFT_FOOT' || joint.name === 'RIGHT_FOOT') {
+			this.oldFootY[joint.name] = joint.y;
+		}
+		this.jointBaseY = -Math.min(this.oldFootY['LEFT_FOOT'] - Joint.H_SIZE, this.oldFootY['RIGHT_FOOT'] - Joint.H_SIZE);		
+		joint.y += this.jointBaseY;
 	
-	if (joint.name === 'LEFT_FOOT' || joint.name === 'RIGHT_FOOT') {
-		this.oldFootY[joint.name] = joint.y;
+		this.joints[joint.name].origPos = joint;
 	}
-	this.jointBaseY = -Math.min(this.oldFootY['LEFT_FOOT'] - Joint.H_SIZE, this.oldFootY['RIGHT_FOOT'] - Joint.H_SIZE);		
-	joint.y += this.jointBaseY;
-
-	this.joints[joint.name].setPosition(joint);
-	for (var i = 0, len = this.edgePoints.length; i < len; i++) {
-		var points = this.edgePoints[i];
-		if (points.type.from !== joint.name && points.type.to !== joint.name) {
+	this.updateJointsPosition();
+};
+Player.prototype.updateJointsPosition = function(){
+	for (var k in this.joints) {
+		var joint = this.joints[k];
+		if (!joint) {
 			continue;
 		}
+		if (joint.origPos) {
+			var newPos = this.rotatePosition({x: joint.origPos.x, y: joint.origPos.y, z: joint.origPos.z});
+			joint.setPosition({x: newPos[0], y: newPos[1], z: newPos[2]});
+		}
+	}
+	for (var i = 0, len = this.edgePoints.length; i < len; i++) {
+		var points = this.edgePoints[i];
 		if (!this.joints[points.type.to].pos || !this.joints[points.type.from].pos) {
 			continue;
 		}
 		points.setPosition(this.joints[points.type.from].pos, this.joints[points.type.to].pos);
 	}
-	if (!this.basePos) {
-		this.updateBasePosition();
-	}
-};
-Player.prototype.updateBasePosition = function(){
-	var sumX = 0, sumZ = 0;
-	var count = 0;
-	for (var k in this.joints) {
-		var pos = this.joints[k].pos;
-		if (!pos) {
-			continue;
-		}
-		count++;
-		sumX += this.joints[k].pos.x;
-		sumZ += this.joints[k].pos.z;
-	}
-	this.basePos = {x: sumX / count, y: 0, z: sumZ / count};
 };
 function pointToArray(point){
 	return [point.x, point.y, point.z];
@@ -256,11 +255,8 @@ function arrayToPoint(array){
 }
 Player.prototype.rotatePosition = function(pos){
 	var modelView = mat4.create();
-	
 	mat4.identity(modelView);
-	mat4.translate(modelView, pointToArray(this.basePos));
 	mat4.rotate(modelView, this.angleY * (Math.PI / 180.0), [0, 1, 0]);
-	mat4.translate(modelView, [-this.basePos.x, -this.basePos.y, -this.basePos.z]);
 
 	var newPos = [0, 0, 0];
 	mat4.multiplyVec3(modelView, pointToArray(pos), newPos);
@@ -269,6 +265,6 @@ Player.prototype.rotatePosition = function(pos){
 };
 Player.prototype.turn = function(diff){
 	this.angleY += diff;
+	this.updateJointsPosition();
 };
-
 })();

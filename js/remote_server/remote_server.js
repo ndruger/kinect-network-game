@@ -354,7 +354,12 @@ ServerPlayer.prototype.destroy = function(){
 	field.removePiece(this.id);
 };
 ServerPlayer.prototype.sendMap = function(){
-	// todo: implement
+	proxy.broadcast({
+		type: 'create_player',
+		arg: {
+			id: this.id
+		}
+	});
 };
 ServerPlayer.prototype.getRandomServerJointPosition = function(){
 	return this.joints[cs.Joint.types[Math.floor(Math.random() * cs.Joint.types.length)]].pos;
@@ -403,21 +408,19 @@ var handleMessage = function(data, client){
 		player = new ServerPlayer();
 		client.playerId = player.id;
 		proxy.send(client, {
-			type: 'create_your_player',
+			type: 'set_player_id',
 			arg: {
 				id: client.playerId
 			}
 		});
-		// todo: sendmap
+		player.sendMap();
 		break;
 	case 'kinect_joint_postion':
 		player = field.getPiece(client.playerId);
 		if (!player) {
 			return;
 		}
-		for (var i = 0, len = data.arg.positions.length; i < len; i++) {
-			player.setJointPosition(data.arg.positions[i]);
-		}
+		player.setJointPosition(data.arg.positions);
 		data.arg.id = client.playerId;
 		proxy.broadcast(data);
 		break;
@@ -426,6 +429,15 @@ var handleMessage = function(data, client){
 		if (enemy) {
 			enemy.createBullet();
 		}
+		break;
+	case 'move_request':
+		player = field.getPiece(client.playerId);
+		if (!player) {
+			return;
+		}
+		player.move(data.arg.dir);
+		data.arg.id = client.playerId;
+		proxy.broadcast(data);
 		break;
 	case 'turn':
 		player = field.getPiece(client.playerId);
