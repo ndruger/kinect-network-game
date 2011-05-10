@@ -20,6 +20,27 @@ if (query.port) {
 }
 
 // todo: create objects
+function chainSimpleRotate(id, nodes, type){
+	var wrapper = [{
+		type: 'rotate',
+		id: id + '-rotate-' + type,
+		angle: 0.0,
+		y: 1.0,
+		nodes: nodes
+	}];
+	wrapper[0][type] = 1.0;
+	return wrapper;
+}
+function chainSimpleRotateX(id, nodes){
+	return chainSimpleRotate(id, nodes, 'x');
+}
+function chainSimpleRotateY(id, nodes){
+	return chainSimpleRotate(id, nodes, 'y');
+}
+function chainSimpleRotateZ(id, nodes){
+	return chainSimpleRotate(id, nodes, 'z');
+}
+
 function setNodeXYZ(id, pos){
 	var node = SceneJS.withNode(id);
 	node.set('x', pos.x);
@@ -200,29 +221,15 @@ Unit.prototype._createNode = function(node){
 		x: this.pos.x,
 		y: this.pos.y,
 		z: this.pos.z,
-		nodes: [{
-			type: 'rotate',
-			id: this.id + '-rotate-y',
-			angle: 0.0,
-			y: 1.0,
-			nodes: [{
-				type: 'rotate',
-				id: this.id + '-rotate-x',
-				angle: 0.0, 
-				x: 1.0,
-				nodes: [{
-					type: 'rotate',
-					id: this.id + '-rotate-z',
-					angle: 0.0,
-					z: 1.0,
-					nodes: [{
-						type: 'scale',
-						id: this.id + '-scale',
-						nodes: [ node ]
-					}]
-				}]
-			}]
-		}]
+		nodes: chainSimpleRotateY(this.id, 
+			chainSimpleRotateX(this.id,
+				chainSimpleRotateZ(this.id, [{
+					type: 'scale',
+					id: this.id + '-scale',
+					nodes: [node]
+				}])
+			)
+		)
 	});
 	
 	createAndMountNodes(nodes, this.id);
@@ -325,11 +332,12 @@ Enemy.prototype.setDamege = function(damege){
 
 function ClientJoint(type, player){
 	mycs.superClass(ClientJoint).constructor.apply(this, [type, player]);
+			
 	function createEdge(id) {
 		return {
 			type: "translate",
-			id: id,
-			nodes: [{
+			id: id + '-translate',
+			nodes: chainSimpleRotateY(id, [{
 				type: "material",
 				baseColor: { r: 1.0, g: 0.0, b: 0.0 },
 				shine: 1.0,
@@ -340,14 +348,14 @@ function ClientJoint(type, player){
 					ySize: cs.Joint.H_SIZE,
 					zSize: cs.Joint.H_SIZE
 				}]
-			}]
+			}])
 		};
 	}
 	function createShield(id) {
 		return {
 			type: "translate",
-			id: id,
-			nodes: [{
+			id: id + '-translate',
+			nodes: chainSimpleRotateY(id, [{
 			    type: "material",
 			    baseColor: { r: 0.2, g: 0.2, b: 0.2 },
 			    shine: 6.0,
@@ -371,7 +379,7 @@ function ClientJoint(type, player){
 	                    }]
 		            }]
 			    }]
-			}]
+			}])
 		};
 	}
 
@@ -388,12 +396,13 @@ ClientJoint.prototype.destroy = function(){
 };
 ClientJoint.prototype._createNode = function(factory){
 	var nodes = [];
-	nodes.push(factory(this.id + '-translate'));
+	nodes.push(factory(this.id));
 	createAndMountNodes(nodes, this.id);
 };
-ClientJoint.prototype.render = function(pos){
+ClientJoint.prototype.render = function(angleY){
 	if (this.pos) {
 		setNodeXYZ(this.id + '-translate', this.pos);
+		SceneJS.withNode(this.id + '-rotate-y').set('angle', angleY);
 	}
 };
 
@@ -508,7 +517,7 @@ ClientPlayer.prototype.render = function(){
 		if (!joint) {
 			continue;
 		}
-		joint.render();
+		joint.render(this.angleY);
 	}
 	for (var i = 0, len = this.edgePoints.length; i < len; i++) {
 		var points = this.edgePoints[i];
