@@ -15,11 +15,12 @@ var ASSERT = mycs.ASSERT;
 var DP = mycs.DP;
 exports.REMOTE_PORT = 8761;
 exports.DEVICE_PORT = 8869;
+exports.CONTROLLER_PORT = 8254;
 exports.FIELD_SIZE = 100;
 exports.ENEMY_SIZE = 10;
 
-exports.FIELD_X_WIDTH = 100.0;
-exports.FIELD_Z_WIDTH = 100.0;
+exports.FIELD_X_WIDTH = 200.0;
+exports.FIELD_Z_WIDTH = 200.0;
 exports.FIELD_Y_WIDTH = 30.0;
 
 var ID_SIZE = 10;

@@ -19,9 +19,10 @@ if (argv.r) {
 }
 var BROWSER_PORT = (argv.b) ? argv.b: cs.DEVICE_PORT;
 var KINECT_PORT = (argv.k) ? argv.k: 8841;
+var HMD_PORT = (argv.h) ? argv.h: 8821;
 
 // Proxy for sending data to Browser
-proxy = new mys.WebSocketProxy(BROWSER_PORT, null, null, null);
+proxy = new mys.SocketIoProxy(BROWSER_PORT, null, null, null);
 
 // receive from OpenNI
 var handleData = (function(){
@@ -38,6 +39,19 @@ var handleData = (function(){
 		return new_buff;
 	};
 })();
+
+function createBufferingTCPServer(port){	
+	net.createServer(function(socket){
+		var buff = '';
+		socket.on("data", function(data){
+			buff = handleData(buff, data);
+		});
+		socket.on('error', function (exc) {
+			sys.log("ignoring exception: " + exc);
+		});
+	}).listen(port, "127.0.0.1");
+}
+
 if (isReplay) {
 	fs.open(replayPath, 'r', undefined, function(status, fd){
 		if (status !== null) {
@@ -56,13 +70,6 @@ if (isReplay) {
 		}, 10);	// todo: save original time line
 	});
 } else {
-	net.createServer(function(socket){
-		var buff = '';
-		socket.on("data", function(data){
-			buff = handleData(buff, data);
-		});
-		socket.on('error', function (exc) {
-			sys.log("ignoring exception: " + exc);
-		});
-	}).listen(KINECT_PORT, "127.0.0.1");
+	createBufferingTCPServer(KINECT_PORT);
 }
+createBufferingTCPServer(HMD_PORT);

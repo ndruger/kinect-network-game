@@ -77,6 +77,14 @@ if (typeof KeyEvent == 'undefined') {
 		DOM_VK_Z: 90
 	};
 }
+
+var keyCodeToDir = {};
+keyCodeToDir[KeyEvent.DOM_VK_LEFT] = 'left';
+keyCodeToDir[KeyEvent.DOM_VK_RIGHT] = 'right';
+keyCodeToDir[KeyEvent.DOM_VK_UP] = 'up';
+keyCodeToDir[KeyEvent.DOM_VK_DOWN] = 'down';
+module.keyCodeToDir = keyCodeToDir;
+
 function WebSocketProxy(port, openProc, messageProc, closeProc, opt_fullDomain){
 	var fullDomain;
 	if (typeof opt_fullDomain == 'undefined') {

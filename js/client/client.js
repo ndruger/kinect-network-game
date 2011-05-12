@@ -5,13 +5,14 @@ var DEBUG = true;
 var cs = myModules.cs;
 var mycs = myModules.mycs;
 var myc = myModules.myc;
-var deviceProxy, remoteProxy, field, myPlayerId = -1, counter, myEnemyId, renderingTimer = -1;
+var deviceProxy, remoteProxy, field, myPlayerId = -1, counter, myEnemyId, renderingTimer = -1, nobind_conrollers;
 
 var FPS = 60;
-
 var SCALE = 0.008;
 var EYE_Z = 70;	// todo: check SCALE
 var LOOK_AT_EYE = { x: 0.0, y: 10, z: EYE_Z };
+
+var useVR920 = false;
 
 var devicePort = cs.DEVICE_PORT;
 var query = myc.parseQuery();
@@ -90,6 +91,30 @@ function displayMessage(message){
 	}
 	ele.innerHTML = message;
 }
+
+function NobindControllers(){
+}
+NobindControllers.prototype.update = function(in_id_list){
+	var df = document.createDocumentFragment();
+	var len = in_id_list.length;
+	var self = this;
+	for (var i = 0; i < len; i++) {
+		var ele = document.createElement('button');
+		ele.innerHTML = in_id_list[i];
+		ele.addEventListener('click', function(){
+			self.requestBinding(this.textContent);
+			ele.parentNode.innerHTML = '';	// todo: too fast
+		}, false);
+		df.appendChild(ele);
+	}
+
+	var list_element = document.getElementById('controller_list'); 
+	list_element.innerHTML = '';
+	list_element.appendChild(df);
+};
+NobindControllers.prototype.requestBinding = function(in_id){
+	remoteProxy.send({type: 'binding_request', arg:{id: in_id}});
+};
 
 function ClientField(aspect){
 	mycs.superClass(ClientField).constructor.apply(this, []);
@@ -325,9 +350,6 @@ Enemy.prototype._createNode = function(){
 Enemy.prototype.setDamege = function(damege){
 	this.destroy();
 	var enemies = field.getPiecesByType('enemy');
-	if (enemies.length === 0) {
-		displayMessage('You win.');
-	}
 };
 
 function ClientJoint(type, player){
@@ -448,6 +470,7 @@ function ClientPlayer(id, opt_basePos, opt_angleY){
 	this.type = 'player';
 	this.id = id;
 	this.noPos = true;
+	this.HMDAngle = null;
 	var factory = {
 		createJoint: function(type, player){
 			return new ClientJoint(type, player);
@@ -480,8 +503,8 @@ ClientPlayer.prototype.destroy = function(){
 };
 ClientPlayer.prototype.updateLife = function(life){
 	document.getElementById('life_bar_life').style.width = life * (100 / cs.Player.LIFE_MAX) + '%';
-	if (life === 0 && !DEBUG) {
-		displayMessage('You lose. Press F5 to retry.');
+	if (life === 0) {
+		displayMessage('You lose.<br><br>Press F5 to retry.');
 	}
 };
 ClientPlayer.prototype.setJointPosition = function(positions){
@@ -494,10 +517,24 @@ ClientPlayer.prototype.setJointPosition = function(positions){
 ClientPlayer.prototype.updateEye = function(){
 	if (this.isMyPlayer() && this.joints['HEAD'].pos) {
 		var headPos = this.joints['HEAD'].pos;
-		var newPos = cs.calcRoatatePosition({x:0, y:this.angleY, z:0}, 30);
 		var eye = SceneJS.withNode('player_eye');
-		eye.set('eye', {x: headPos.x + newPos[0], y: 15, z: headPos.z + newPos[2]});
-		eye.set('look', headPos);
+		if (useVR920) {
+			if (!this.HMDAngle) {
+				return;
+			}
+			var angleY = this.HMDAngle.yaw * (180.0 / 32768) + 180;
+			var angleX = this.HMDAngle.pitch * (90.0 / 16384);
+			var angleZ = this.HMDAngle.roll * (180.0 / 32768);
+			
+			var diff = cs.calcRoatatePosition({x: angleX, y: angleY + this.angleY, z: angleZ}, 10);	// todo: fix bug
+						
+			eye.set('eye', {x: headPos.x + diff[0] / 2, y: headPos.y + diff[1] / 2, z: headPos.z + diff[2] / 2});
+			eye.set('look', {x: headPos.x + diff[0], y: headPos.y + diff[1], z: headPos.z + diff[2]});
+		} else {
+			var newPos = cs.calcRoatatePosition({x:0, y:this.angleY, z:0}, 30);
+			eye.set('eye', {x: headPos.x + newPos[0], y: 15, z: headPos.z + newPos[2]});
+			eye.set('look', {x: headPos.x, y: 10, z: headPos.z});
+		}
 	}
 };
 ClientPlayer.prototype.turn = function(diff){
@@ -523,6 +560,12 @@ ClientPlayer.prototype.render = function(){
 		var points = this.edgePoints[i];
 		points.render();
 	}
+	if (useVR920) {
+		this.updateEye();
+	}
+};
+ClientPlayer.prototype.setHMDAngle = function(angle){
+	this.HMDAngle = angle;
 };
 
 function Counter(){
@@ -570,13 +613,34 @@ RenderingTimer.prototype.stop = function(){
 	}
 };
 
+function switchHMDMode(){
+	useVR920 = !useVR920;
+	var ele = document.getElementById('swith_VR920_mode');
+	if (useVR920) {
+		ele.innerHTML = 'VR920 off';
+	} else {
+		var player = field.getPiece(myPlayerId);
+		if (player) {
+			player.updateEye();
+		}
+		ele.innerHTML = 'VR920 on';
+	}
+}
+
 var handleRemoteMessage = function(data){
 	counter.increment(Counter.REMOTE_PACKET);
-	if (data.type !== 'kinect_joint_postion' && data.arg.type === 'player') {
-		DP(data.type);
+	if (data.type !== 'kinect_joint_postion' && data.arg && data.arg.type === 'player') {
+		LOG(data.type);
 	}
 	var bullet, enemy, player;
 	switch (data.type) {
+	case 'switch_hmd_mode':
+		switchHMDMode();
+		break;
+	case 'controller_list':
+		LOG('handleMainBrowserMessage: list: ' + data.arg.list);
+		nobind_conrollers.update(data.arg.list);
+		break;
 	case 'set_player_id':
 		myPlayerId = data.arg.id;
 		break;
@@ -684,6 +748,8 @@ function adjustKinectPositions(positions){
 }
 
 function handleDeviceMessage(data){
+	var player;
+	
 	counter.increment(Counter.DEVIDE_PACKET);
 	switch (data.type) {
 	case 'kinect_joint_postion':
@@ -698,10 +764,16 @@ function handleDeviceMessage(data){
 		} else {
 			adjustKinectPositions(data.arg.positions);
 			remoteProxy.send(data);
-			var player = field.getPiece(myPlayerId);
+			player = field.getPiece(myPlayerId);
 			if (player) {
 				player.setJointPosition(data.arg.positions);	// server don't send client kinect data to it self for reducing latency.
 			}
+		}
+		break;
+	case 'vr920':
+		player = field.getPiece(myPlayerId);
+		if (player) {
+			player.setHMDAngle({yaw: data.arg.yaw, pitch: data.arg.pitch, roll: data.arg.roll});
 		}
 		break;
 	}
@@ -745,11 +817,11 @@ function handleLoad(e){
 	info.style.top = canvas_bound_rect.top + window.scrollY + 30 + 'px';
 	
 	field = new ClientField(canvas.width / canvas.height);
-	remoteProxy = new myc.WebSocketProxy(
+	remoteProxy = new myc.SocketIoProxy(
 		cs.REMOTE_PORT,
 		function(){
 			LOG('remote proxy open');
-			deviceProxy = new myc.WebSocketProxy(
+			deviceProxy = new myc.SocketIoProxy(
 				devicePort,
 				function(){
 					LOG('device proxy open');
@@ -760,12 +832,14 @@ function handleLoad(e){
 				},
 				'127.0.0.1'
 			);
+			nobind_conrollers = new NobindControllers();
 		},
 		handleRemoteMessage,
 		function(){
 			LOG('remote proxy close');
 		}
 	);
+	document.getElementById('swith_VR920_mode').addEventListener('click', switchHMDMode, false);
 
 	renderingTimer = new RenderingTimer();
 	renderingTimer.start();
@@ -792,37 +866,21 @@ function handleKeydown(e){
 		e.preventDefault();
 		break;
 	case KeyEvent.DOM_VK_UP:
-		remoteProxy.send({
-			type: 'move_request',
-			arg: {
-				dir: 'up'
-			}
-		});
-		e.preventDefault();
-		break;
 	case KeyEvent.DOM_VK_DOWN:
 		remoteProxy.send({
 			type: 'move_request',
 			arg: {
-				dir: 'down'
+				dir: myc.keyCodeToDir[e.keyCode]
 			}
 		});
 		e.preventDefault();
 		break;
 	case KeyEvent.DOM_VK_RIGHT:
-		remoteProxy.send({
-			type: 'turn',
-			arg: {
-				diff: -10
-			}
-		});
-		e.preventDefault();
-		break;
 	case KeyEvent.DOM_VK_LEFT:
 		remoteProxy.send({
 			type: 'turn',
 			arg: {
-				diff: +10
+				diff: {'right': -10, 'left': 10}[myc.keyCodeToDir[e.keyCode]]
 			}
 		});
 		e.preventDefault();
@@ -842,10 +900,10 @@ function handleKeydown(e){
 window.addEventListener('keydown', handleKeydown, false);
 
 window.addEventListener('focus', function(){
-	renderingTimer.start();
+//	renderingTimer.start();
 }, false);
 window.addEventListener('blur', function(){
-	renderingTimer.stop();
+//	renderingTimer.stop();
 }, false);
 
 })();

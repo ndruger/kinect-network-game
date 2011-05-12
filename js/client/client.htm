@@ -2,6 +2,14 @@
 	<head>
 		<title>kinect game base</title>
 		<META http-equiv=content-type content="text/html; charset=UTF-8">
+		<script type="text/javascript">
+			function isSmartPhone(){
+				return (navigator.userAgent.match(/iPhone/i) || navigator.userAgent.match(/iPod/i) || navigator.userAgent.match(/Android/i));
+			}
+			if (isSmartPhone()) {
+				location.href = "controller.htm";
+			}
+		</script>
 		<style TYPE="text/css">
 		<!--
 		body{
@@ -46,6 +54,19 @@
 			-moz-border-radius: 10px;
 			text-align: center;
 			padding: 30px;
+			font-size: 70px;
+		}
+		#controller_list_wrapper{
+			border-style: solid;
+			border-width: 1px;
+			border-color: #ffaaaa;
+			-webkit-border-radius: 10px;
+			-moz-border-radius: 10px;
+			padding: 4px;
+			opacity: 0.6;
+		}
+		#swith_VR920_mode{
+			opacity: 0.6;
 		}
 		-->
 		</style>
@@ -56,14 +77,19 @@
 			<div id="fps"></div>
 			<div id="packet_per_second_from_remote"></div>
 			<div id="packet_per_second_from_device"></div>
+			<div id="controller_list_wrapper">
+				マッピングされてないiPhone / iPod touch一覧<br>
+				<div id="controller_list"></div>
+			</div>
+			<button id="swith_VR920_mode">VR920 on</button>
 		</div>
 		<div id="life_bar">
 			<div id="life_bar_life"></div>
 		</div>
 		<br>
 		<div class="exp_unit">
-		■ コピーライト<br>
-		- このゲームのキャラクタの画像は、<a href="http://opengameart.org">OpenGameArg.org</a>が配布している3D画像素材の<a href="http://opengameart.org/content/tux">tux</a>を加工して使用してます。<br>
+		<!-- ■ コピーライト<br>
+		- このゲームのキャラクタの画像は、<a href="http://opengameart.org">OpenGameArg.org</a>が配布している3D画像素材の<a href="http://opengameart.org/content/tux">tux</a>を加工して使用してます。<br> -->
 		</div>
 		<div id="output"></div>
 		<br>
@@ -74,16 +100,14 @@
 		<script type="text/javascript" defer src="../client_and_server/lib/glMatrix-0.9.4.min.js"></script>
 		<script type="text/javascript" src="../lib/my/my_client_and_server.js"></script>
 		<script type="text/javascript">
-		myModules.mycs.setShorthands(window);
+			myModules.mycs.setShorthands(window);
 		</script>
 		<script type="text/javascript" defer src="../lib/my/my_client.js"></script>
 		<script type="text/javascript" src="../client_and_server/client_and_server.js"></script>
-		<!--
 		<script type="text/javascript" src="lib/socket.io-client/socket.io.js"></script>
 		<script type="text/javascript">
 			WEB_SOCKET_SWF_LOCATION = 'lib/socket.io-client/lib/vendor/web-socket-js/WebSocketMain.swf';
 		</script>
-		-->
 		<script type="text/javascript" defer src="blender.js"></script>
 		<script type="text/javascript" defer src="client.js"></script>
 	</body>

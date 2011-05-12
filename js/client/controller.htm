@@ -1,0 +1,85 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html>
+<head>
+<META http-equiv=content-type content="text/html; charset=UTF-8">
+<title>Controller</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">
+
+<style TYPE="text/css">
+<!--
+body{
+}
+.button{
+	position: absolute;
+	-webkit-transform: rotate(45deg);
+	-moz-transform: rotate(45deg);
+	background-color: #ff0000;
+}
+#up_button{
+	top: 0px;
+	left: 33%;
+}
+#down_button{
+	top: 66%;
+	left: 33%;
+}
+#left_button{
+	top: 33%;
+	left: 0px;
+}
+#right_button{
+	top: 33%;
+	left: 66%;
+}
+#debug1{
+	top: 0px;
+	left: 0px;
+	width: 470px;
+	position: absolute;
+	background-color: #ffff00;
+	display: none;
+}
+#debug2{
+	top: 0px;
+	left: 0px;
+	height: 260px;
+	position: absolute;
+	background-color: #ffff00;
+	display: none;
+}
+#switch_hmd_mode{
+	top: 0px;
+	left: 0px;
+	position: absolute;
+}
+-->
+</style>
+</head>
+<body>
+	<div class="button" id="up_button"></div>
+	<div class="button" id="down_button"></div>
+	<div class="button" id="left_button"></div>
+	<div class="button" id="right_button"></div>
+	<button id="switch_hmd_mode">switch HMD mode</button>
+	
+	<div id="debug1">neko</div>
+	<div id="debug2">neko</div>
+	
+	<script type="text/javascript">
+		var myModules = {};
+	</script>
+	<script type="text/javascript" src="../lib/my/my_client_and_server.js"></script>
+	<script type="text/javascript">
+		myModules.mycs.setShorthands(window);
+	</script>
+	<script type="text/javascript" defer src="../lib/my/my_client.js"></script>
+	<script type="text/javascript" defer src="../client_and_server/client_and_server.js"></script>
+	<script type="text/javascript" src="lib/socket.io-client/socket.io.js"></script>
+	<script type="text/javascript">
+		WEB_SOCKET_SWF_LOCATION = 'lib/socket.io-client/lib/vendor/web-socket-js/WebSocketMain.swf';
+	</script>
+	<script type="application/javascript" defer src="controller.js"></script>
+
+</body>
+</html>
+

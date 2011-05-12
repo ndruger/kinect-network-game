@@ -1,4 +1,4 @@
-/*global require, process, global */
+/*global require, process, global, JSON */
 /*global DP, LOG, ASSERT, DIR, DPD */
 /*global Enemy */
 var http = require('http');
@@ -11,7 +11,95 @@ var ASSERT = mycs.ASSERT;
 mycs.setShorthands(global);
 
 var DEBUG = false;
-var field, proxy;
+var field, proxy, bindManager, controllerProxy, clientCount = 0;
+
+function getClientID(client){	// todo fix for websocket and move to my_server.js
+	return client.sessionId;
+}
+
+var playerInitialValues = [
+	{angleY: 0, basePos: {x: 0, y: 0, z: 0}},
+	{angleY: 180, basePos: {x: 0, y: 0, z: -40}}
+];
+
+// Bind Manager
+function BindManager(){
+	this.nobindMainBrowsers = {};
+	this.nobindControllers = {};	// todo: object is better for remove/add wrapping
+	this.boundMainBrowsers = {};	// key is controller id
+	this.boundControllers = {};	// key is main browser id
+}
+BindManager.prototype.addMainBrowser = function(in_conn){
+	LOG('BindManager.prototype.addMainBrowser');
+	this.nobindMainBrowsers[getClientID(in_conn)] = in_conn;
+	this._sendControllerList(this.nobindMainBrowsers[getClientID(in_conn)]);
+};
+BindManager.prototype.removeMainBrowser = function(in_conn){
+	LOG('BindManager.prototype.removeMainBrowser');
+	delete this.nobindMainBrowsers[getClientID(in_conn)];
+	
+	var bound_controller = this.boundControllers[getClientID(in_conn)]; 
+	if (bound_controller) {
+		this.nobindControllers[getClientID(bound_controller)] =  bound_controller;
+		delete this.boundMainBrowsers[getClientID(bound_controller)];
+		delete this.boundControllers[getClientID(in_conn)];
+	}
+	this._broadcastControllerList();
+};
+BindManager.prototype.addController = function(in_conn){
+	LOG('BindManager.prototype.addController');
+		this.nobindControllers[getClientID(in_conn)] = in_conn;
+	this._broadcastControllerList();
+};
+BindManager.prototype.removeController = function(in_conn){
+	LOG('BindManager.prototype.removeController');
+	delete this.nobindControllers[getClientID(in_conn)];
+	var bound_main_browser = this.boundMainBrowsers[getClientID(in_conn)]; 
+	if (bound_main_browser) {
+		this.nobindMainBrowsers[getClientID(bound_main_browser)] =  bound_main_browser;
+		delete this.boundControllers[getClientID(bound_main_browser)];
+		delete this.boundMainBrowsers[getClientID(in_conn)];
+	}
+	this._broadcastControllerList();
+};
+BindManager.prototype._sendControllerList = function(in_conn){
+	this._sendControllerListImp(in_conn);
+};
+BindManager.prototype._broadcastControllerList = function(){
+	this._sendControllerListImp();
+};
+BindManager.prototype._sendControllerListImp = function(oin_conn){
+	LOG('BindManager.prototype._sendControllerListImp');
+	var id_list = [];
+	for (var k in this.nobindControllers) {
+		id_list.push(getClientID(this.nobindControllers[k]));
+	}
+	LOG('BindManager.prototype._sendControllerListImp: list: ' + id_list);
+	var mes = {type: 'controller_list', arg:{list: id_list}};
+	if (oin_conn) {
+		proxy.send(oin_conn, mes);
+	} else {
+		for (k in this.nobindMainBrowsers) {
+			proxy.send(this.nobindMainBrowsers[k], mes);
+		}
+	}
+};
+BindManager.prototype.bind = function(in_main_browser_conn, in_controller_id){
+	delete this.nobindMainBrowsers[getClientID(in_main_browser_conn)];
+	var controller = this.nobindControllers[in_controller_id];
+	delete this.nobindControllers[in_controller_id];
+	this.boundMainBrowsers[in_controller_id] = in_main_browser_conn;
+	this.boundControllers[getClientID(in_main_browser_conn)] = controller;
+	this._broadcastControllerList();
+};
+BindManager.prototype.getBindedMainBrowser = function(in_controller_id){
+	var found = this.boundMainBrowsers[in_controller_id];
+	if (found) {
+		return found;
+	} else {
+		return null;
+	}
+};
 
 function ServerField(){
 	mycs.superClass(ServerField).constructor.apply(this, []);
@@ -66,9 +154,9 @@ Unit.prototype.makeSendData = function(action_type, arg_o){
 	};
 };
 
-function MovableObject(point, type, speed, handle_dir){
+function MovableObject(point, type, speed, handleDir){
 	mycs.superClass(MovableObject).constructor.apply(this, [point, type]);
-	this.handleDir = handle_dir;
+	this.handleDir = handleDir;
 	this.speed = speed;
 	var self = this;
 	this.moveTimer = setInterval(function(){
@@ -96,15 +184,17 @@ MovableObject.prototype.moving = function(old_pos){
 	return true;
 };
 
-function Bullet(point, speed, handle_dir, owner_type){
-	mycs.superClass(Bullet).constructor.apply(this, [point, 'bullet', speed, handle_dir]);
-	this.ownerType = owner_type;
+function Bullet(point, speed, handleDir, ownerType, ownerId){
+	mycs.superClass(Bullet).constructor.apply(this, [point, 'bullet', speed, handleDir]);
+	this.ownerType = ownerType;
+	this.ownerId = ownerId;
 
 	var s = this.makeSendData('create', {
 		type: this.type,
 		id: this.id,
 		pos: this.pos,
-		ownerType: this.ownerType
+		ownerType: this.ownerType,
+		ownerId: this.ownerId
 	});
 	proxy.broadcast(s);
 }
@@ -133,7 +223,7 @@ Bullet.calcDir = function(start, end, vibration){	// todo: fix to use angle as d
 	}
 	return normalized;
 };
-Bullet.POWER = 10;
+Bullet.POWER = 20;
 Bullet.prototype.moving = function(old_pos){
 	mycs.superClass(Bullet).moving.apply(this, []);
 	var r = Bullet.type[this.ownerType].r;
@@ -146,7 +236,7 @@ Bullet.prototype.moving = function(old_pos){
 	var palyers = field.getPiecesByType('player');
 	for (var j = 0, jLen = palyers.length; j < jLen; j++) {
 		var player = palyers[j];
-		if (this.ownerType === 'enemy') {
+		if (this.ownerType === 'enemy' || (this.ownerType === 'player' && this.ownerId !== player.id)) {
 			if (player.checkShieldCollision(this.pos, Bullet.type[this.ownerType].r)) {
 				this.destroy();
 				return false;
@@ -156,8 +246,8 @@ Bullet.prototype.moving = function(old_pos){
 				this.destroy();
 				return false;
 			}
-		} else {
-			ASSERT(this.ownerType === 'player');
+		}
+		if (this.ownerType === 'player') {
 			var enemies = field.getPiecesByType('enemy');
 			var len = enemies.length;
 			for (var i = 0; i < len; i++) {
@@ -220,7 +310,7 @@ Enemy.prototype.createBullet = function(){
 	}
 	var VIBRATION = 0.04;
 	var dir = Bullet.calcDir(this.pos, player_pos, VIBRATION);
-	new Bullet(this.pos, 2, dir, 'enemy');
+	new Bullet(this.pos, 2, dir, 'enemy', this.id);
 };
 Enemy.X_ANGLE_BASE = 270.0;
 Enemy.prototype.destroy = function(){
@@ -312,7 +402,7 @@ GestureManager.prototype.DetectAction = function(){
 				var speed = cs.calcDistance(hand, old_hand);
 				self.twistArm[dir] = false;
 				var bulletDir = Bullet.calcDir(shoulder, hand, 0);
-				new Bullet(hand, speed * 4, bulletDir, 'player');
+				new Bullet(hand, speed * 2, bulletDir, 'player', self.player.id);
 			}
 		} else if (angle <= 90) {
 			self.twistArm[dir] = true;
@@ -332,7 +422,7 @@ GestureManager.prototype.DetectAction = function(){
 	}
 };
 
-function ServerPlayer(client){
+function ServerPlayer(client, opt_basePos, opt_angleY){
 	var factory = {
 		createJoint: function(type, player){
 			return new ServerJoint(type, player);
@@ -342,7 +432,7 @@ function ServerPlayer(client){
 			
 		}
 	};
-	mycs.superClass(ServerPlayer).constructor.apply(this, [factory]);
+	mycs.superClass(ServerPlayer).constructor.apply(this, [factory, opt_basePos, opt_angleY]);
 	this.type = 'player';
 	this.id = this.type + mycs.createId(cs.ID_SIZE);
 	proxy.send(client, {
@@ -355,7 +445,9 @@ function ServerPlayer(client){
 		type: 'create',
 		arg: {
 			type: this.type,
-			id: this.id
+			id: this.id,
+			basePos: opt_basePos,
+			angleY: opt_angleY
 		}
 	});
 	this._gestureManager = new GestureManager(this);
@@ -444,15 +536,33 @@ ServerPlayer.prototype.move = function(dir){
 		}
 	});
 };
+ServerPlayer.prototype.turn = function(diff){
+	mycs.superClass(ServerPlayer).turn.apply(this, [diff]);
+	proxy.broadcast({
+		type: 'turn',
+		arg: {
+			id: this.id,
+			diff: diff
+		}
+	});
+};
 
+// todo: filter dirty packet
 var handleMessage = function(data, client){
 	var player;
 	switch (data.type) {
+	case 'binding_request':
+		bindManager.bind(client, data.arg.id);
+		break;
 	case 'create_player_request':
 		if (client.playerId) {
 			return;
 		}
-		player = new ServerPlayer(client);
+		if (client.playerInitialValue) {
+			player = new ServerPlayer(client, client.playerInitialValue.basePos, client.playerInitialValue.angleY);
+		} else {
+			player = new ServerPlayer(client);
+		}
 		client.playerId = player.id;
 		break;
 	case 'kinect_joint_postion':
@@ -483,22 +593,26 @@ var handleMessage = function(data, client){
 			return;
 		}
 		player.turn(data.arg.diff);
-		data.arg.id = client.playerId;
-		proxy.broadcast(data);
 		break;
 	}
 };
 
-proxy = new mys.WebSocketProxy(cs.REMOTE_PORT, function(client){
-		DP('connected');
+proxy = new mys.SocketIoProxy(cs.REMOTE_PORT, function(client){
+		DP('client connected');
+		clientCount++;
 		field.sendMap(client);
-		client.enemyId = -1;
+		client.enemyId = -1;	// todo: use userdata
 		var x = Math.random() * 40 - 20;
 		var y = cs.ENEMY_SIZE / 2 - 1;
 		var z = -40;
-		new Enemy({x: x, y: y, z: z}, false, client);
+//		new Enemy({x: x, y: y, z: z}, false, client);
+		bindManager.addMainBrowser(client);
+		if (clientCount <= playerInitialValues.length) {
+			client.playerInitialValue = playerInitialValues[clientCount - 1];
+		}
 	}, handleMessage, function(client){
-		DP('disconnected');
+		DP('client disconnected');
+		clientCount--;
 		if (client.enemyId != -1) {
 			var enemy = field.getPiece(client.enemyId);
 			if (enemy) {
@@ -506,6 +620,7 @@ proxy = new mys.WebSocketProxy(cs.REMOTE_PORT, function(client){
 			}
 		}
 		if (client.playerId != -1) {
+			bindManager.removeMainBrowser(client);
 			var player = field.getPiece(client.playerId);
 			if (player) {
 				player.destroy();
@@ -514,7 +629,46 @@ proxy = new mys.WebSocketProxy(cs.REMOTE_PORT, function(client){
 	}
 );
 
+controllerProxy = new mys.SocketIoProxy(cs.CONTROLLER_PORT, function(client){
+		DP('controller connected');
+		bindManager.addController(client);
+	}, function(data, client){
+		var browserClient = bindManager.getBindedMainBrowser(getClientID(client));
+		if (!browserClient) {
+			return;
+		}
+		var player;
+		switch (data.type) {
+		case 'switch_hmd_mode':
+			proxy.send(browserClient, {
+				type: 'switch_hmd_mode'
+			});
+			break;
+		case 'move_request':
+			player = field.getPiece(browserClient.playerId);
+			if (!player) {
+				return;
+			}
+			player.move(data.arg.dir);
+			break;
+		case 'turn':
+			player = field.getPiece(browserClient.playerId);
+			if (!player) {
+				return;
+			}
+			player.turn(data.arg.diff);
+			break;
+		}
+	}, function(client){
+		DP('controller disconnected');
+		bindManager.removeController(client);
+	}
+);
+
 field = new ServerField();
 if (DEBUG) {
 	field.initEnemies();
 }
+
+bindManager = new BindManager();
+
