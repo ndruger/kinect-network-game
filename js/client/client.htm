@@ -26,15 +26,14 @@
 			font-weight: bolder;
 			white-space: nowrap;
 		}
-		#life_bar{
-			position: absolute;
+		.life_bar{
 			opacity: 0.6;
-			height: 10px;
+			height: 20px;
 			background-color: #ff0000;
 		}
-		#life_bar_life{
+		.life_bar_life{
 			background-color: #00ff00;
-			height: 10px;
+			height: 20px;
 		}
 		.exp_unit{
 			border-style: solid;
@@ -64,9 +63,20 @@
 			-moz-border-radius: 10px;
 			padding: 4px;
 			opacity: 0.6;
+			display: inline-block;
 		}
 		#swith_VR920_mode{
 			opacity: 0.6;
+		}
+		#life_bars{
+			opacity: 0.6;
+			width: 300px;
+			border-style: solid;
+			border-width: 1px;
+			border-color: #ffaaaa;
+			-webkit-border-radius: 10px;
+			-moz-border-radius: 10px;
+			padding: 20px;
 		}
 		-->
 		</style>
@@ -74,6 +84,7 @@
 	<body>
 		<canvas id="main_canvas" width="1000" height="600"></canvas>
 		<div id="info">
+			<div id="my_life_bar_wrapper"></div>
 			<div id="fps"></div>
 			<div id="packet_per_second_from_remote"></div>
 			<div id="packet_per_second_from_device"></div>
@@ -82,9 +93,8 @@
 				<div id="controller_list"></div>
 			</div>
 			<button id="swith_VR920_mode">VR920 on</button>
-		</div>
-		<div id="life_bar">
-			<div id="life_bar_life"></div>
+			<div id="life_bars">
+			</div>
 		</div>
 		<br>
 		<div class="exp_unit">

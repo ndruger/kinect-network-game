@@ -18,8 +18,8 @@ function getClientID(client){	// todo fix for websocket and move to my_server.js
 }
 
 var playerInitialValues = [
-	{angleY: 0, basePos: {x: 0, y: 0, z: 0}},
-	{angleY: 180, basePos: {x: 0, y: 0, z: -40}}
+	{angleY: 0, basePos: {x: 0, y: 0, z: 20}},
+	{angleY: 180, basePos: {x: 0, y: 0, z: -20}}
 ];
 
 // Bind Manager
@@ -201,12 +201,10 @@ function Bullet(point, speed, handleDir, ownerType, ownerId){
 mycs.inherit(Bullet, MovableObject);
 Bullet.type = {
 	enemy: {
-		color: { r: 0.0, g: 0.0, b: 1.0 },
-		r: 0.3
+		r: cs.ENEMY_BULLET_R
 	},
 	player: {
-		color: { r: 1.0, g: 1.0, b: 1.0 },
-		r: 0.5
+		r: cs.PLAYER_BULLET_R
 	}
 };
 Bullet.calcDir = function(start, end, vibration){	// todo: fix to use angle as direction

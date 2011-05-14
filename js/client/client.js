@@ -6,8 +6,9 @@ var cs = myModules.cs;
 var mycs = myModules.mycs;
 var myc = myModules.myc;
 var deviceProxy, remoteProxy, field, myPlayerId = -1, counter, myEnemyId, renderingTimer = -1, nobind_conrollers;
+var lifeBars;
 
-var FPS = 60;
+var FPS = 30;
 var SCALE = 0.008;
 var EYE_Z = 70;	// todo: check SCALE
 var LOOK_AT_EYE = { x: 0.0, y: 10, z: EYE_Z };
@@ -222,6 +223,32 @@ function ClientField(aspect){
 }
 mycs.inherit(ClientField, cs.Field);
 
+function LifeBars(){
+}
+LifeBars.prototype.add = function(playerId){
+	var frame = document.createElement('div');
+	frame.className = 'life_bar';
+	frame.id = 'life_bar_' + playerId;
+	
+	var life = document.createElement('div');
+	life.className = 'life_bar_life';
+	life.id = 'life_bar_life_' + playerId;
+	frame.appendChild(life);
+
+	if (playerId === myPlayerId) {
+		document.getElementById('my_life_bar_wrapper').appendChild(frame);
+	} else {
+		document.getElementById('life_bars').appendChild(frame);
+	}
+};
+LifeBars.prototype.remove = function(playerId){
+	var ele = document.getElementById('life_bar_' + playerId);
+	ele.parentNode.removeChild(ele);
+};
+LifeBars.prototype.update = function(playerId, percent){
+	document.getElementById('life_bar_life_' + playerId).style.width = percent + '%';
+};
+
 function Unit(point, type, oid){
 	if (typeof oid != 'undefined') {
 		this.id = oid;
@@ -285,11 +312,11 @@ mycs.inherit(Bullet, Unit);
 Bullet.type = {
 	enemy: {
 		color: { r: 0.0, g: 0.0, b: 1.0 },
-		r: 0.3
+		r: cs.ENEMY_BULLET_R
 	},
 	player: {
 		color: { r: 1.0, g: 1.0, b: 1.0 },
-		r: 0.5
+		r: cs.PLAYER_BULLET_R
 	}
 };
 Bullet.prototype._createNode = function(){
@@ -482,6 +509,7 @@ function ClientPlayer(id, opt_basePos, opt_angleY){
 	};
 	mycs.superClass(ClientPlayer).constructor.apply(this, [factory, opt_basePos, opt_angleY]);
 	field.addPiece(this, this.id);
+	lifeBars.add(this.id);
 }
 mycs.inherit(ClientPlayer, cs.Player);
 ClientPlayer.prototype.destroy = function(){
@@ -500,10 +528,11 @@ ClientPlayer.prototype.destroy = function(){
 		edgePoint.destroy();
 	}
 	field.removePiece(this.id);
+	lifeBars.remove(this.id);
 };
 ClientPlayer.prototype.updateLife = function(life){
-	document.getElementById('life_bar_life').style.width = life * (100 / cs.Player.LIFE_MAX) + '%';
-	if (life === 0) {
+	lifeBars.update(this.id, life * (100 / cs.Player.LIFE_MAX));
+	if (this.id === myPlayerId && life === 0) {
 		displayMessage('You lose.<br><br>Press F5 to retry.');
 	}
 };
@@ -527,8 +556,9 @@ ClientPlayer.prototype.updateEye = function(){
 			var angleZ = this.HMDAngle.roll * (180.0 / 32768);
 			
 			var diff = cs.calcRoatatePosition({x: angleX, y: angleY + this.angleY, z: angleZ}, 10);	// todo: fix bug
-						
-			eye.set('eye', {x: headPos.x + diff[0] / 2, y: headPos.y + diff[1] / 2, z: headPos.z + diff[2] / 2});
+			
+			var p = (Math.sqrt(Math.pow(cs.Joint.H_SIZE, 2) * 2) + 0.1) / 10;
+			eye.set('eye', {x: headPos.x + diff[0] * p, y: headPos.y + diff[1] * p, z: headPos.z + diff[2] * p});
 			eye.set('look', {x: headPos.x + diff[0], y: headPos.y + diff[1], z: headPos.z + diff[2]});
 		} else {
 			var newPos = cs.calcRoatatePosition({x:0, y:this.angleY, z:0}, 30);
@@ -807,14 +837,12 @@ function handleLoad(e){
 
 	var canvas_bound_rect = canvas.getBoundingClientRect();
 
-	var life_bar = document.getElementById('life_bar');
-	life_bar.style.width = (canvas_bound_rect.width - 20) + 'px';
-	life_bar.style.left = canvas_bound_rect.left + window.scrollX + 10 + 'px';
-	life_bar.style.top = canvas_bound_rect.top + window.scrollY + 10 + 'px';
+	var myLifeBarOuter = document.getElementById('my_life_bar_wrapper');
+	myLifeBarOuter.style.width = (canvas_bound_rect.width - 20) + 'px';
 
 	var info = document.getElementById('info');
 	info.style.left = canvas_bound_rect.left + window.scrollX + 10 + 'px';
-	info.style.top = canvas_bound_rect.top + window.scrollY + 30 + 'px';
+	info.style.top = canvas_bound_rect.top + window.scrollY + 10 + 'px';
 	
 	field = new ClientField(canvas.width / canvas.height);
 	remoteProxy = new myc.SocketIoProxy(
@@ -843,6 +871,8 @@ function handleLoad(e){
 
 	renderingTimer = new RenderingTimer();
 	renderingTimer.start();
+	
+	lifeBars = new LifeBars();
 }
 window.addEventListener('load', handleLoad, false);
 

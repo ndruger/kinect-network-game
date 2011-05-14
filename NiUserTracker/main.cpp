@@ -155,6 +155,7 @@ void glutDisplay (void)
 		DrawDepthMap(depthMD, sceneMD);
 
 	glutSwapBuffers();
+	Sleep(5);	// todo: adjust
 }
 
 void glutIdle (void)

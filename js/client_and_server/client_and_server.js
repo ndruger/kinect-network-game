@@ -29,6 +29,9 @@ exports.ID_SIZE = ID_SIZE;
 var SCALE = 0.008;
 exports.SCALE = SCALE;
 
+exports.PLAYER_BULLET_R = 0.8;
+exports.ENEMY_BULLET_R = 0.3;
+
 exports.calcRoatatePosition = function(angle, r){
 	var modelView = mat4.create();
 	
