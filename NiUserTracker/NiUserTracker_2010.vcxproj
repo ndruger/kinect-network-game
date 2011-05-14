@@ -75,7 +75,7 @@
     <ClCompile>
       <Optimization>MaxSpeed</Optimization>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <AdditionalIncludeDirectories>../../Include;../../Samples/NiUserTracker;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>./;./GL;./glh;$(OPEN_NI_INCLUDE);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
@@ -88,9 +88,9 @@
       <AdditionalIncludeDirectories>..\..\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>openNI.lib;glut32.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <OutputFile>../Bin/$(Configuration)/$(ProjectName).exe</OutputFile>
-      <AdditionalLibraryDirectories>../../Lib/$(Configuration);../../Lib/;../../Samples/NiUserTracker/Libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>wsock32.lib;openNI.lib;glut32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>./$(Configuration)/$(ProjectName).exe</OutputFile>
+      <AdditionalLibraryDirectories>../../Lib/$(Configuration);../../Lib/;../../Samples/NiUserTracker/Libs;%(AdditionalLibraryDirectories);$(OPEN_NI_LIB);./Libs</AdditionalLibraryDirectories>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>../Bin/$(Configuration)/$(TargetName).pdb</ProgramDatabaseFile>
       <SubSystem>Console</SubSystem>
