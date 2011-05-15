@@ -303,33 +303,62 @@ Unit.prototype.render = function(pos){
 	}
 };
 
-function Bullet(point, id, owner_type){
+function Bullet(point, id, owner_type, r){
 	mycs.superClass(Bullet).constructor.apply(this, [point, 'bullet', id]);
 	this.ownerType = owner_type;
+	this.r = r;
 	this._createNode();
 }
 mycs.inherit(Bullet, Unit);
 Bullet.type = {
 	enemy: {
-		color: { r: 0.0, g: 0.0, b: 1.0 },
-		r: cs.ENEMY_BULLET_R
+		color: { r: 0.0, g: 0.0, b: 1.0 }
 	},
 	player: {
-		color: { r: 1.0, g: 1.0, b: 1.0 },
-		r: cs.PLAYER_BULLET_R
+		color: { r: 1.0, g: 1.0, b: 1.0 }
 	}
 };
 Bullet.prototype._createNode = function(){
 	mycs.superClass(Bullet)._createNode.apply(this, [{
 		type: "material",
 		baseColor: Bullet.type[this.ownerType].color,
-		shine:          4.0,
-		opacity:        1.0,
+		shine: 4.0,
+		opacity: 1.0,
         nodes: [{
         	type: "sphere"
         }]
 	}]);
-	var r = Bullet.type[this.ownerType].r;
+	this.updateScale(this.r, this.r, this.r);
+};
+
+function Explosion(point, firstR){
+	this.firstR = firstR;
+	this.lastR = firstR * 2;
+	this.duration = 500;
+	this.startTime = Date.now();
+	mycs.superClass(Explosion).constructor.apply(this, [point, 'explode', mycs.createId(cs.ID_SIZE)]);
+	this._createNode();
+	
+	var self = this;
+	setTimeout(function(){
+		self.destroy();
+	}, this.duration);
+}
+mycs.inherit(Explosion, Unit);
+Explosion.prototype._createNode = function(){
+	mycs.superClass(Explosion)._createNode.apply(this, [{
+		type: 'material',
+		baseColor: { r: 1.0, g: 0.0, b: 0.0 },
+		shine: 4.0,
+		opacity: 1.0,
+        nodes: [{
+        	type: 'sphere'
+        }]
+	}]);
+	this.updateScale(this.firstR, this.firstR, this.firstR);
+};
+Explosion.prototype.render = function(pos){
+	var r = this.firstR + (this.lastR - this.firstR) * Math.min((Date.now() - this.startTime) * (1 / this.duration), 1);
 	this.updateScale(r, r, r);
 };
 
@@ -662,7 +691,7 @@ var handleRemoteMessage = function(data){
 	if (data.type !== 'kinect_joint_postion' && data.arg && data.arg.type === 'player') {
 		LOG(data.type);
 	}
-	var bullet, enemy, player;
+	var bullet, enemy, player, piece;
 	switch (data.type) {
 	case 'switch_hmd_mode':
 		switchHMDMode();
@@ -737,7 +766,7 @@ var handleRemoteMessage = function(data){
 		}
 		break;
 	case 'destroy':
-		var piece = field.getPiece(data.arg.id);
+		piece = field.getPiece(data.arg.id);
 		if (piece) {
 			piece.destroy();
 		}
@@ -751,6 +780,9 @@ var handleRemoteMessage = function(data){
 		break;
 	case 'bind_enemy':
 		myEnemyId = data.arg.id;
+		break;
+	case 'explode':
+		new Explosion(data.arg.pos, data.arg.firstR);
 		break;
 	default:
 		ASSERT(false);

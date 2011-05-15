@@ -159,7 +159,7 @@ function MovableObject(point, type, speed, handleDir){
 	this.handleDir = handleDir;
 	this.speed = speed;
 	var self = this;
-	this.moveTimer = setInterval(function(){
+	this.moveTimer = setInterval(function(){	// todo: very fool. use main loop.
 		var new_pos = {};
 		new_pos.x = self.pos.x + self.handleDir.x * self.speed;
 		new_pos.y = self.pos.y + self.handleDir.y * self.speed;
@@ -188,13 +188,15 @@ function Bullet(point, speed, handleDir, ownerType, ownerId){
 	mycs.superClass(Bullet).constructor.apply(this, [point, 'bullet', speed, handleDir]);
 	this.ownerType = ownerType;
 	this.ownerId = ownerId;
+	this.r = Bullet.type[this.ownerType].r;
 
 	var s = this.makeSendData('create', {
 		type: this.type,
 		id: this.id,
 		pos: this.pos,
 		ownerType: this.ownerType,
-		ownerId: this.ownerId
+		ownerId: this.ownerId,
+		r: this.r
 	});
 	proxy.broadcast(s);
 }
@@ -224,7 +226,7 @@ Bullet.calcDir = function(start, end, vibration){	// todo: fix to use angle as d
 Bullet.POWER = 20;
 Bullet.prototype.moving = function(old_pos){
 	mycs.superClass(Bullet).moving.apply(this, []);
-	var r = Bullet.type[this.ownerType].r;
+	var r = this.r;
 	if (this.pos.x + r * 2 < -cs.FIELD_X_WIDTH / 2 || this.pos.x - r * 2 > cs.FIELD_X_WIDTH / 2 ||
 		this.pos.y + r * 2 < 0 || this.pos.y - r * 2 > cs.FIELD_Y_WIDTH ||
 		this.pos.z + r * 2 < -cs.FIELD_Z_WIDTH / 2 || this.pos.z - r * 2 > cs.FIELD_Z_WIDTH / 2) {
@@ -235,12 +237,13 @@ Bullet.prototype.moving = function(old_pos){
 	for (var j = 0, jLen = palyers.length; j < jLen; j++) {
 		var player = palyers[j];
 		if (this.ownerType === 'enemy' || (this.ownerType === 'player' && this.ownerId !== player.id)) {
-			if (player.checkShieldCollision(this.pos, Bullet.type[this.ownerType].r)) {
+			if (player.checkShieldCollision(this.pos, this.r)) {
 				this.destroy();
 				return false;
 			}
-			if (player.checkDamageCollision(this.pos, Bullet.type[this.ownerType].r)) {
+			if (player.checkDamageCollision(this.pos, this.r)) {
 				player.setDamege(Bullet.POWER);
+				this.explode();
 				this.destroy();
 				return false;
 			}
@@ -250,8 +253,9 @@ Bullet.prototype.moving = function(old_pos){
 			var len = enemies.length;
 			for (var i = 0; i < len; i++) {
 				var enemy = enemies[i];
-				if (enemy.checkCollision(this.pos, Bullet.type[this.ownerType].r)) {
+				if (enemy.checkCollision(this.pos, this.r)) {
 					enemy.setDamege(Bullet.POWER);
+					this.explode();
 					this.destroy();
 					return false;
 				}
@@ -259,6 +263,12 @@ Bullet.prototype.moving = function(old_pos){
 		}
 	}
 	return true;
+};
+Bullet.prototype.explode = function(){
+	proxy.broadcast(this.makeSendData('explode', {
+		pos: this.pos,
+		firstR: this.r
+	}));
 };
 Bullet.prototype.sendMap = function(conn){
 	proxy.send(conn, this.makeSendData('send_map', {
@@ -596,7 +606,7 @@ var handleMessage = function(data, client){
 };
 
 proxy = new mys.SocketIoProxy(cs.REMOTE_PORT, function(client){
-		DP('client connected');
+		LOG('client connected');
 		clientCount++;
 		field.sendMap(client);
 		client.enemyId = -1;	// todo: use userdata
@@ -609,7 +619,7 @@ proxy = new mys.SocketIoProxy(cs.REMOTE_PORT, function(client){
 			client.playerInitialValue = playerInitialValues[clientCount - 1];
 		}
 	}, handleMessage, function(client){
-		DP('client disconnected');
+		LOG('client disconnected');
 		clientCount--;
 		if (client.enemyId != -1) {
 			var enemy = field.getPiece(client.enemyId);
@@ -628,7 +638,7 @@ proxy = new mys.SocketIoProxy(cs.REMOTE_PORT, function(client){
 );
 
 controllerProxy = new mys.SocketIoProxy(cs.CONTROLLER_PORT, function(client){
-		DP('controller connected');
+		LOG('controller connected');
 		bindManager.addController(client);
 	}, function(data, client){
 		var browserClient = bindManager.getBindedMainBrowser(getClientID(client));
@@ -658,7 +668,7 @@ controllerProxy = new mys.SocketIoProxy(cs.CONTROLLER_PORT, function(client){
 			break;
 		}
 	}, function(client){
-		DP('controller disconnected');
+		LOG('controller disconnected');
 		bindManager.removeController(client);
 	}
 );
