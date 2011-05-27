@@ -661,8 +661,18 @@ function RenderingTimer(){
 	this.timer = -1;
 }
 RenderingTimer.prototype.start = function(){
-	if (this.timer === -1) {
-		this.timer = setInterval(function(){ render(); }, 1000 / FPS);
+//	var requestAnimationFrame = window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame;
+	var requestAnimationFrame = null;
+	if (requestAnimationFrame) {
+		window.webkitRequestAnimationFrame(function step() {
+			render();
+			requestAnimationFrame(step);
+		});
+	} else {
+		if (this.timer === -1) {
+			this.timer = setInterval(function(){ render(); }, 1000 / FPS);
+		}
+		
 	}
 };
 RenderingTimer.prototype.stop = function(){
@@ -784,6 +794,17 @@ var handleRemoteMessage = function(data){
 	case 'explode':
 		new Explosion(data.arg.pos, data.arg.firstR);
 		break;
+	case 'echo_request':
+		remoteProxy.send({
+			type: 'echo_response',
+			arg: {
+				timestamp: data.arg.timestamp
+			}
+		});
+		break;
+	case 'echo_response':
+		document.getElementById('echo_info').textContent = 'Echo time: ' + (Date.now() - data.arg.timestamp) + ' ms';
+		break;
 	default:
 		ASSERT(false);
 		break;
@@ -893,6 +914,15 @@ function handleLoad(e){
 				'127.0.0.1'
 			);
 			nobind_conrollers = new NobindControllers();
+			
+			setInterval(function() {
+				remoteProxy.send({
+					type: 'echo_request',
+					arg: {
+						timestamp: Date.now()
+					}
+				});
+			}, 1000);
 		},
 		handleRemoteMessage,
 		function(){

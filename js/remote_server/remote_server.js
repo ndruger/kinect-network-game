@@ -7,7 +7,6 @@ var fs = require('fs');
 var mycs = require('../lib/my/my_client_and_server');
 var mys = require('../lib/my/my_server');
 var cs = require('../client_and_server/client_and_server');
-var ASSERT = mycs.ASSERT;
 mycs.setShorthands(global);
 
 var DEBUG = false;
@@ -18,8 +17,8 @@ function getClientID(client){	// todo fix for websocket and move to my_server.js
 }
 
 var playerInitialValues = [
-	{angleY: 0, basePos: {x: 0, y: 0, z: 20}},
-	{angleY: 180, basePos: {x: 0, y: 0, z: -20}}
+	{angleY: 180, basePos: {x: 0, y: 0, z: -20}},
+	{angleY: 0, basePos: {x: 0, y: 0, z: 20}}
 ];
 
 // Bind Manager
@@ -601,6 +600,12 @@ var handleMessage = function(data, client){
 			return;
 		}
 		player.turn(data.arg.diff);
+		break;
+	case 'echo_request':
+		proxy.broadcastExceptFor(client, data);
+		break;
+	case 'echo_response':	// todo: don't use broadcast
+		proxy.broadcastExceptFor(client, data);
 		break;
 	}
 };
