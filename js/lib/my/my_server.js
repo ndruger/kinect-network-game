@@ -33,6 +33,9 @@ function WebSocketProxy(port, openProc, messageProc, closeProc, opt_maxConnectio
 			if (messageProc) {
 				try {
 					var data = JSON.parse(message);
+					if (data.type === '_heartbeat') {
+						return;
+					}
 				}
 				catch (e) {
 					console.log('ignoring exception: ' + e);
@@ -94,6 +97,9 @@ function SocketIoProxy(port, openProc, messageProc, closeProc, opt_server){
 			if (messageProc) {
 				try {
 					var data = JSON.parse(message);
+					if (data.type === '_heartbeat') {
+						return;
+					}
 				}
 				catch (e) {
 					console.log('ignoring exception: ' + e);

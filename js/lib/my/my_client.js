@@ -1,10 +1,12 @@
-/*global KeyEvent, WebSocket, io, myModules, exports, JSON, LOG */
+/*global KeyEvent, WebSocket, io, myModules, exports, JSON, LOG, ASSERT */
 (function(){
 var module;
 if (typeof exports == 'undefined') {
 	exports = {};
 }
+var mycs;
 if (typeof myModules != 'undefined') {
+	mycs = myModules.mycs;
 	module = myModules.myc = {};
 } else {
 	module = exports;
@@ -85,73 +87,93 @@ keyCodeToDir[KeyEvent.DOM_VK_UP] = 'up';
 keyCodeToDir[KeyEvent.DOM_VK_DOWN] = 'down';
 module.keyCodeToDir = keyCodeToDir;
 
-function WebSocketProxy(port, openProc, messageProc, closeProc, opt_fullDomain){
-	var fullDomain;
+function Proxy(port, openProc, messageProc, closeProc, opt_fullDomain) {
+	this.messageProc = messageProc;
+	this.openProc = openProc;
+	this.closeProc = closeProc;
 	if (typeof opt_fullDomain == 'undefined') {
-		fullDomain = location.href.split('/')[2].split(':')[0];
+		this.fullDomain = location.href.split('/')[2].split(':')[0];
 	} else {
-		fullDomain = opt_fullDomain;
+		this.fullDomain = opt_fullDomain;
 	}
-	this._ws = new WebSocket('ws://' + fullDomain + ':' + port);
-	this._ws.onopen = openProc;
-	this._ws.onmessage = function(message){
-		if (messageProc) {
-			try {
-				var data = JSON.parse(message.data);
-			}
-			catch (e) {
-				LOG('ignoring exception: ' + e);
-				return;
-			}
-			messageProc(data);
-		}
-	};
-	this._ws.onclose = closeProc;
+	this.heartbeatTimer = -1;
 }
-module.WebSocketProxy = WebSocketProxy;
-WebSocketProxy.prototype.send = function(data){
-	if (typeof data == 'object') {
-		this._ws.send(JSON.stringify(data));
-	} else {
-		this._ws.send(data);
+Proxy.prototype.handleMessage = function(message) {
+	if (this.messageProc) {
+		try {
+			var data = JSON.parse(message);
+		}
+		catch (e) {
+			LOG('ignoring exception: ' + e);
+			return;
+		}
+		this.messageProc(data);
 	}
+};
+Proxy.prototype.handleOpen = function(){
+	var self = this;
+	this.heartbeatTimer = setInterval(function() {
+		/*
+		self.send({
+			type: '_heartbeat'
+		});
+		*/
+	}, 5000);
+	this.openProc();
+};
+Proxy.prototype.handleClose = function(){
+	clearInterval(this.heartbeatTimer);
+	this.closeProc();
+};
+Proxy.prototype.send = function(data){
+	if (typeof data == 'object') {
+		this._send(JSON.stringify(data));
+	} else {
+		this._send(data);
+	}
+};
+Proxy.prototype._send = function(data){
+	ASSERT(false);
+};
+
+function WebSocketProxy(port, openProc, messageProc, closeProc, opt_fullDomain){
+	mycs.superClass(WebSocketProxy).constructor.apply(this, [port, openProc, messageProc, closeProc, opt_fullDomain]);
+
+	this._ws = new WebSocket('ws://' + this.fullDomain + ':' + port);
+	var self = this;
+	this._ws.onopen = function(){ self.handleOpen(); };
+	this._ws.onmessage = function(message){ self.handleMessage(message.data); };
+	this._ws.onclose = function(){	self.handleClose(); };
+}
+mycs.inherit(WebSocketProxy, Proxy);
+module.WebSocketProxy = WebSocketProxy;
+WebSocketProxy.prototype._send = function(data){
+	this._ws.send(data);
 };
 WebSocketProxy.prototype.close = function(){
 	this._ws.close();
 };
 
 function SocketIoProxy(port, openProc, messageProc, closeProc, opt_fullDomain){
-	var fullDomain;
-	if (typeof opt_fullDomain == 'undefined') {
-		fullDomain = location.href.split('/')[2].split(':')[0];
-	} else {
-		fullDomain = opt_fullDomain;
-	}
-	this._socket = new io.Socket(fullDomain, {port: port}); 
-	this._socket.connect();
+	mycs.superClass(SocketIoProxy).constructor.apply(this, [port, openProc, messageProc, closeProc, opt_fullDomain]);
 
-	this._socket.on('connect', function(){ openProc(); });
-	this._socket.on('message', function(message){
-		if (messageProc) {
-			try {
-				var data = JSON.parse(message);
-			}
-			catch (e) {
-				LOG('ignoring exception: ' + e);
-				return;
-			}
-			messageProc(data);
-		}
+	this._socket = new io.Socket(this.fullDomain, {port: port}); 
+	this._socket.connect();
+	var self = this;
+	this._socket.on('connect', function() {
+		self.handleOpen();
 	});
-	this._socket.on('disconnect', function(){ closeProc(); });
+	this._socket.on('message', function(message){
+		self.handleMessage(message);
+	});
+	this._socket.on('disconnect', function(){
+		self.handleClose();
+	});
 }
+mycs.inherit(SocketIoProxy, Proxy);
 module.SocketIoProxy = SocketIoProxy;
-SocketIoProxy.prototype.send = function(data){
-	if (typeof data == 'object') {
-		this._socket.send(JSON.stringify(data));
-	} else {
-		this._socket.send(data);
-	}
+SocketIoProxy.prototype._send = function(data){
+	this._socket.send(data);
 };
 SocketIoProxy.prototype.close = function(){
 	this._socket.disconnect();
