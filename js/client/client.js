@@ -5,7 +5,7 @@ var DEBUG = true;
 var cs = myModules.cs;
 var mycs = myModules.mycs;
 var myc = myModules.myc;
-var deviceProxy, remoteProxy, field, myPlayerId = -1, counter, myEnemyId, renderingTimer = -1, nobind_conrollers;
+var deviceProxy, remoteProxy, field, myPlayerId = -1, counter, myEnemyId, renderingLoop = -1, nobind_conrollers;
 var lifeBars;
 
 var FPS = 30;
@@ -50,29 +50,16 @@ function setNodeXYZ(id, pos){
 	node.set('z', pos.z);
 }
 function createAndMountNodes(node, id){
-	SceneJS.Message.sendMessage({
-		command: 'create',
-		nodes: [{
-			type: 'node',
-			id: id,
-			nodes: node
-		}]
-	});
-	SceneJS.Message.sendMessage({
-		command: 'update',
-		target: 'mount-node',
-		add: {
-			node: id
-		}
+	SceneJS.createNode({
+		type: 'node',
+		id: id,
+		parent: 'mount-node',
+		nodes: node
 	});
 }
 function removeNode(id){
-	SceneJS.Message.sendMessage({
-		command: "update",
-		target: 'mount-node',
-		remove: {
-			node: id
-		}
+	SceneJS.withNode('mount-node').remove({
+		node: id
 	});
 }
 
@@ -143,34 +130,28 @@ function ClientField(aspect){
 					type: "light",
 					mode: "dir",
 					color: { r: 0.9, g: 0.9, b: 0.9 },
-					diffuse: true,
-					specular: true,
-					dir: { x: 0.0, y: 10.0, z: 0.0 },
-					pos: { x: 0.0, y: 0.0, z: 0.0}
+					dir: { x: 0.0, y: -10.0, z: 0.0 },
+					pos: { x: 0.0, y: 10.0, z: 0.0}
 				},
 				{
 					type: "light",
 					mode: "dir",
 					color: { r: 0.3, g: 0.3, b: 0.3 },
-					diffuse: true,
-					specular: true,
-					dir: { x: 0.0, y: 0.0, z: EYE_Z - 1 },
+					dir: { x: 0.0, y: -1.0, z: EYE_Z - 1 },
 					pos: { x: 0.0, y: 10.0, z: EYE_Z }
 				},
 				{
 					type: "light",
 					mode: "dir",
-					color: { r: 0.3, g: 0.3, b: 0.3 },
-					diffuse: true,
-					specular: true,
-					dir: { x: 0.0, y: 0.0, z: -EYE_Z - 1 },
+					color: { r: 0.9, g: 0.9, b: 0.9 },
+					dir: { x: 0.0, y: -1.0, z: -EYE_Z - 1 },
 					pos: { x: 0.0, y: 10.0, z: -EYE_Z }
 				},
 				{
 				    type: "material",
 				    id: "floor",
 				    baseColor: { r: 0.2, g: 0.2, b: 0.2 },
-				    shine: 6.0,
+				    shine: 10.0,
 				    nodes: [{
 			            type: "texture",
 			            layers: [{
@@ -657,29 +638,17 @@ Counter.prototype.increment = function(type){
 	}
 };
 
-function RenderingTimer(){
+function RenderingLoop(){
 	this.timer = -1;
 }
-RenderingTimer.prototype.start = function(){
-//	var requestAnimationFrame = window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame;
-	var requestAnimationFrame = null;
-	if (requestAnimationFrame) {
-		window.webkitRequestAnimationFrame(function step() {
-			render();
-			requestAnimationFrame(step);
-		});
-	} else {
-		if (this.timer === -1) {
-			this.timer = setInterval(function(){ render(); }, 1000 / FPS);
-		}
-		
-	}
+RenderingLoop.prototype.start = function(){
+	SceneJS.withNode('the-scene').start({
+		fps: FPS,
+		idleFunc: render
+	});
 };
-RenderingTimer.prototype.stop = function(){
-	if (this.timer !== -1) {
-		clearInterval(this.timer);
-		this.timer = -1;
-	}
+RenderingLoop.prototype.stop = function(){
+	SceneJS.withNode('the-scene').stop();
 };
 
 function switchHMDMode(){
@@ -931,8 +900,8 @@ function handleLoad(e){
 	);
 	document.getElementById('swith_VR920_mode').addEventListener('click', switchHMDMode, false);
 
-	renderingTimer = new RenderingTimer();
-	renderingTimer.start();
+	renderingLoop = new RenderingLoop();
+	renderingLoop.start();
 	
 	lifeBars = new LifeBars();
 }
@@ -992,10 +961,10 @@ function handleKeydown(e){
 window.addEventListener('keydown', handleKeydown, false);
 
 window.addEventListener('focus', function(){
-//	renderingTimer.start();
+//	renderingLoop.start();	 // comment out for demonstration
 }, false);
 window.addEventListener('blur', function(){
-//	renderingTimer.stop();
+//	renderingLoop.stop();	// comment out for demonstration
 }, false);
 
 })();
