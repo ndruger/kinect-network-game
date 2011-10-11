@@ -832,7 +832,6 @@ function adjustKinectPositions(positions){
 
 function handleDeviceMessage(data){
 	var player;
-	
 	counter.increment(Counter.DEVIDE_PACKET);
 	switch (data.type) {
 	case 'kinect_joint_postion':

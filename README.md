@@ -1,7 +1,7 @@
-# Kinect Network Game Sample #
+# Kinect 3D Modeling Tool #
 
 ## Introduction ##
-Experimental Kinect network game sample
+Experimental Kinect 3D modeling tool
 
 
 ## How it work?##

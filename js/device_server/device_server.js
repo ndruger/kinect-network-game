@@ -1,4 +1,4 @@
-/*global require, DP, process */
+/*global require, DP, process, JSON */
 var net = require('net');
 var sys = require('sys');
 var fs = require('fs');
@@ -31,7 +31,7 @@ var handleData = (function(){
 		var len = mess.length;
 		var new_buff = mess[len - 1];
 		for (var i = 0; i < len - 1; i++) {
-			proxy.broadcast(mess[i]);
+			proxy.broadcast(JSON.parse(mess[i]));
 			if (ws) {
 				ws.write(mess[i] + '!');
 			}

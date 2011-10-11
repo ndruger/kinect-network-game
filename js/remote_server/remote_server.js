@@ -554,8 +554,9 @@ ServerPlayer.prototype.turn = function(diff){
 	});
 };
 
-// todo: filter dirty packet
 var handleMessage = function(data, client){
+	DP('neko');
+	DP(data);
 	var player;
 	switch (data.type) {
 	case 'binding_request':

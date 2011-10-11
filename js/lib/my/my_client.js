@@ -100,14 +100,7 @@ function Proxy(port, openProc, messageProc, closeProc, opt_fullDomain) {
 }
 Proxy.prototype.handleMessage = function(message) {
 	if (this.messageProc) {
-		try {
-			var data = JSON.parse(message);
-		}
-		catch (e) {
-			LOG('ignoring exception: ' + e);
-			return;
-		}
-		this.messageProc(data);
+		this.messageProc(message);
 	}
 };
 Proxy.prototype.handleOpen = function(){
@@ -126,39 +119,16 @@ Proxy.prototype.handleClose = function(){
 	this.closeProc();
 };
 Proxy.prototype.send = function(data){
-	if (typeof data == 'object') {
-		this._send(JSON.stringify(data));
-	} else {
-		this._send(data);
-	}
+	this._send(data);
 };
 Proxy.prototype._send = function(data){
 	ASSERT(false);
 };
 
-function WebSocketProxy(port, openProc, messageProc, closeProc, opt_fullDomain){
-	mycs.superClass(WebSocketProxy).constructor.apply(this, [port, openProc, messageProc, closeProc, opt_fullDomain]);
-
-	this._ws = new WebSocket('ws://' + this.fullDomain + ':' + port);
-	var self = this;
-	this._ws.onopen = function(){ self.handleOpen(); };
-	this._ws.onmessage = function(message){ self.handleMessage(message.data); };
-	this._ws.onclose = function(){	self.handleClose(); };
-}
-mycs.inherit(WebSocketProxy, Proxy);
-module.WebSocketProxy = WebSocketProxy;
-WebSocketProxy.prototype._send = function(data){
-	this._ws.send(data);
-};
-WebSocketProxy.prototype.close = function(){
-	this._ws.close();
-};
-
 function SocketIoProxy(port, openProc, messageProc, closeProc, opt_fullDomain){
 	mycs.superClass(SocketIoProxy).constructor.apply(this, [port, openProc, messageProc, closeProc, opt_fullDomain]);
 
-	this._socket = new io.Socket(this.fullDomain, {port: port}); 
-	this._socket.connect();
+	this._socket = new io.connect(this.fullDomain + ':' + port); 
 	var self = this;
 	this._socket.on('connect', function() {
 		self.handleOpen();
@@ -173,10 +143,9 @@ function SocketIoProxy(port, openProc, messageProc, closeProc, opt_fullDomain){
 mycs.inherit(SocketIoProxy, Proxy);
 module.SocketIoProxy = SocketIoProxy;
 SocketIoProxy.prototype._send = function(data){
-	this._socket.send(data);
+	this._socket.emit('message', data);
 };
 SocketIoProxy.prototype.close = function(){
-	this._socket.disconnect();
 };
 
 module.parseQuery = function(){
