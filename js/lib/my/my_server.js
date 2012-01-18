@@ -1,6 +1,5 @@
 /*global exports, JSON, console, myModules, require */
 var io = require('socket.io');
-var ws = require('websocket-server');
 var http = require('http');
 var sys = require('sys');
 

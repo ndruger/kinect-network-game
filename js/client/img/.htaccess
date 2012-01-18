@@ -1,4 +1,0 @@
-<Files ~ "\.png$">
-Header add Pragma "no-cache"
-Header set Cache-Control no-cache
-</Files>
